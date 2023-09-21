@@ -4,15 +4,21 @@ import taichi as ti
 import numpy as np
 ti.init(ti.gpu, debug=False, device_memory_fraction=0.7, kernel_profiler=True)
 
-mu = .5
-s_lambda = .5
-# center = ti.Vector([0.55, 0.78])
-center = ti.Vector([0.55, 0.02])
-mass = .001
-v_refect = -0.9
+width = 640
+height = 640
 
+block_radius = 0.38
+
+mu = 7.5
+s_lambda = 7.5
+center = ti.Vector([0.75, 0.78])
+# center = ti.Vector([0.55, 0.02])
+mass = 0.0000625
+v_refect = 0.0
+delta_time = 5e-4
 side_length = 0.2  #
-subdivisions = 1  #
+subdivisions = 7  #
+A = ((side_length / subdivisions) ** 2) / 2
 
 x = np.linspace(0, side_length, subdivisions + 1)  #
 y = np.linspace(0, side_length, subdivisions + 1)  #
@@ -51,7 +57,6 @@ Mesh = ti.types.struct(
 
 particle_cnt = vertices.shape[0]
 mesh_cnt = faces.shape[0]
-delta_time = 1e-3
 meshs = Mesh.field(shape=mesh_cnt)
 particles = Particle.field(shape=particle_cnt)
 
@@ -101,29 +106,25 @@ def kinematic(particle: ti.template(), dt: ti.f32):
         particle.pos.y = 0
         particle.vel.y *= v_refect
 
-    # if (particle.pos - ti.Vector([0.5, 0.5])).norm() < 0.25:
-    #     pre_pos = particle.pos - particle.vel * dt
-    #     dir = ti.math.normalize(particle.vel * dt)
-    #     line_to_circle = ti.Vector([0.5, 0.5]) - pre_pos
-    #     projection_length = line_to_circle.dot(dir)
-    #     perpendicular_length = ti.math.sqrt(line_to_circle.norm() ** 2 - projection_length ** 2)
-    #     intersection_distance = projection_length - ti.math.sqrt(0.25 ** 2 - perpendicular_length ** 2 )
-    #     intersection_point = pre_pos + dir * intersection_distance
-    #     particle.pos = intersection_point
-    #
-    #     n = ti.math.normalize(intersection_point - ti.Vector([0.5, 0.5]))
-    #     v_norm = particle.vel.norm() * (-v_refect)
-    #     particle.vel = (-dir.dot(n) * 2 * n + dir) * v_norm
+    if (particle.pos - ti.Vector([0.5, 0.5])).norm() < block_radius:
+        pre_pos = particle.pos - particle.vel * dt
+        dir = ti.math.normalize(particle.vel * dt)
+        line_to_circle = ti.Vector([0.5, 0.5]) - pre_pos
+        projection_length = line_to_circle.dot(dir)
+        perpendicular_length = ti.math.sqrt(line_to_circle.norm() ** 2 - projection_length ** 2)
+        intersection_distance = projection_length - ti.math.sqrt(block_radius ** 2 - perpendicular_length ** 2 )
+        intersection_point = pre_pos + dir * intersection_distance
+        particle.pos = intersection_point
+
+        n = ti.math.normalize(intersection_point - ti.Vector([0.5, 0.5]))
+        v_norm = particle.vel.norm() * (-v_refect)
+        particle.vel = (-dir.dot(n) * 2 * n + dir) * v_norm
 
 
     particle.force = ti.math.vec2([0.0, 0.0])
 
 @ti.kernel
 def particles_init():
-    # particles[0].pos = center + ti.Vector([-0.1, -0.1])
-    # particles[1].pos = center + ti.Vector([0.1, -0.1])
-    # particles[2].pos = center + ti.Vector([0.1, 0.1])
-    # particles[3].pos = center + ti.Vector([-0.1, 0.1])
 
     for i in range(particle_cnt):
         particles[i].pos = ti_vertices[i] + center
@@ -162,7 +163,7 @@ def fem():
         F = X @ R_inv
         G = 0.5 * (F.transpose() @ F - I)
         S = 2 * mu * G + s_lambda * G.trace() * I
-        force = - 0.02 * F @ S @ R_inv.transpose()
+        force = - A * F @ S @ R_inv.transpose()
         f1 = ti.math.vec2(force[0, 0], force[1, 0])
         f2 = ti.math.vec2(force[0, 1], force[1, 1])
         f0 = - f1 - f2
@@ -172,10 +173,10 @@ def fem():
         particles[mesh.p0].flag = 0
         particles[mesh.p1].flag = 0
         particles[mesh.p2].flag = 0
-        print(f1, particles[mesh.p1].pos, particles[mesh.p1].force)
+        # print(f1, particles[mesh.p1].pos, particles[mesh.p1].force)
 
 if __name__ == '__main__':
-    gui = ti.GUI('Finite Element Method', (640, 640))
+    gui = ti.GUI('Finite Element Method', (width, height))
     particles_init()
     mesh_init()
     frame_cnt = 0
@@ -189,14 +190,14 @@ if __name__ == '__main__':
         #     begin = particles[i].pos
         #     end = particles[(i+1)%particle_cnt].pos
         #     gui.line(begin, end, radius=1, color=0xFF0000)
-        for i in range(mesh_cnt):
-            p0 = particles[meshs[i].p0].pos
-            p1 = particles[meshs[i].p1].pos
-            p2 = particles[meshs[i].p2].pos
-            gui.line(p0, p1, radius=1, color=0xFF0000)
-            gui.line(p1, p2, radius=1, color=0xFF0000)
-            gui.line(p2, p0, radius=1, color=0xFF0000)
+        # for i in range(mesh_cnt):
+        #     p0 = particles[meshs[i].p0].pos
+        #     p1 = particles[meshs[i].p1].pos
+        #     p2 = particles[meshs[i].p2].pos
+        #     gui.line(p0, p1, radius=1, color=0xFF0000)
+        #     gui.line(p1, p2, radius=1, color=0xFF0000)
+        #     gui.line(p2, p0, radius=1, color=0xFF0000)
 
-        # gui.circles(particles.pos.to_numpy(), radius=2, color=0x00FF00)
-        # gui.circle([0.5,0.5], color=0xFF0000, radius=160)
+        gui.circles(particles.pos.to_numpy(), radius=2, color=0x00FF00)
+        gui.circle([0.5,0.5], color=0xFF0000, radius=block_radius * width)
         gui.show()
