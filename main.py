@@ -7,19 +7,18 @@ ti.init(ti.gpu, debug=False, device_memory_fraction=0.7, kernel_profiler=True)
 width = 640
 height = 640
 
-block_radius = 0.32
+block_radius = 0.33
+block_center = [0.5, 0.5]
 
-# mu = 16666
-# s_lambda = 11111.0
 E, nu = 4e4, 0.2  # Young's modulus and Poisson's ratio
 mu, s_lambda = E / 2 / (1 + nu), E * nu / (1 + nu) / (1 - 2 * nu)
 damping = 14.5
 center = ti.Vector([0.72, 0.8])
 # center = ti.Vector([0.55, 0.3])
 v_refect = -0.3
-delta_time = 5e-5
+delta_time = 5e-4
 side_length = 0.2  #
-subdivisions = 8  #
+subdivisions = 10  #
 A = ((side_length / subdivisions) ** 2) / 2
 rho = 1000
 mass = rho * A
@@ -44,6 +43,7 @@ for i in range(subdivisions):
 faces = np.array(faces)
 ti_faces = ti.Vector.field(3, ti.i32, shape=faces.shape[0])
 ti_faces.from_numpy(faces)
+phi = ti.field(dtype=ti.f32, shape=faces.shape[0])
 U = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
 
 Particle = ti.types.struct(
@@ -58,7 +58,8 @@ Particle = ti.types.struct(
 Mesh = ti.types.struct(
     p0=ti.i32,
     p1=ti.i32,
-    p2=ti.i32
+    p2=ti.i32,
+    ref=ti.math.mat2
 )
 
 particle_cnt = vertices.shape[0]
@@ -71,26 +72,18 @@ pos1 = ti.Vector.field(2, ti.f32, shape=particle_cnt, needs_grad=True)
 def compute_energy():
     for i in range(mesh_cnt):
         mesh = meshs[i]
-        p0 = particles[mesh.p0]
-        p1 = particles[mesh.p1]
-        p2 = particles[mesh.p2]
-        pos = particles[mesh.p0].pos
-        ref_pos = p0.ref_pos
-        x1_pos = particles[mesh.p1].pos
-        x1_ref_pos = p1.ref_pos
-        x2_pos = particles[mesh.p2].pos
-        x2_ref_pos = p2.ref_pos
-        x10 = x1_pos - pos
-        x20 = x2_pos - pos
-        r10 = x1_ref_pos - ref_pos
-        r20 = x2_ref_pos - ref_pos
+        p0 = particles[mesh.p0].pos
+        p1 = particles[mesh.p1].pos
+        p2 = particles[mesh.p2].pos
+        p10 = p1 - p0
+        p20 = p2 - p0
         I = ti.math.mat2([1, 0, 0, 1])
-        X = ti.math.mat2([x10.x, x20.x, x10.y, x20.y])
-        R = ti.math.mat2([r10.x, r20.x, r10.y, r20.y])
-        R_inv = ti.math.inverse(R)
+        # X = ti.math.mat2([p10.x, p20.x, p10.y, p20.y])
+        X = ti.Matrix.cols([p10, p20])
+        R_inv = mesh.ref
         F = X @ R_inv
         # G = 0.5 * (F.transpose() @ F - I)
-        S = ti.abs(x10.cross(x20))
+        S = ti.abs(p10.cross(p20))
         # K = G.transpose() @ G
         # U[None] += S * (0.5 * s_lambda * G.trace() **2 + mu * K.trace())
 
@@ -100,7 +93,7 @@ def compute_energy():
         phi_i = mu / 2 * ((F_i.transpose() @ F_i).trace() - 2)
         phi_i -= mu * log_J_i
         phi_i += s_lambda / 2 * log_J_i ** 2
-        # phi[i] = phi_i
+        phi[i] = phi_i * S
         U[None] += S * phi_i
 
 
@@ -136,21 +129,21 @@ def kinematic(index: ti.int32, dt: ti.f32):
         # particles[index].pos.y = 0
         particles[index].vel.y = 0
 
-    if (particles[index].pos - ti.Vector([0.5, 0.5])).norm() < block_radius and particles[index].vel.dot(ti.Vector([0.5, 0.5]) - particles[index].pos) > 0:
+    if (particles[index].pos - ti.Vector(block_center)).norm() < block_radius and particles[index].vel.dot(ti.Vector(block_center) - particles[index].pos) > 0:
         # pre_pos = particles[index].pos - particles[index].vel * dt
         # dir = ti.math.normalize(particles[index].vel * dt)
-        # line_to_circle = ti.Vector([0.5, 0.5]) - pre_pos
+        # line_to_circle = ti.Vector(block_center) - pre_pos
         # projection_length = line_to_circle.dot(dir)
         # perpendicular_length = ti.math.sqrt(line_to_circle.norm() ** 2 - projection_length ** 2)
         # intersection_distance = projection_length - ti.math.sqrt(block_radius ** 2 - perpendicular_length ** 2 )
         # intersection_point = pre_pos + dir * intersection_distance
         # particles[index].pos = intersection_point
         #
-        # n = ti.math.normalize(intersection_point - ti.Vector([0.5, 0.5]))
+        # n = ti.math.normalize(intersection_point - ti.Vector(block_center))
         # v_norm = particles[index].vel.norm() * (-v_refect)
         # particles[index].vel = (-dir.dot(n) * 2 * n + dir) * v_norm
 
-        disp = particles[index].pos - ti.Vector([0.5, 0.5])
+        disp = particles[index].pos - ti.Vector(block_center)
         particles[index].vel -= particles[index].vel.dot(disp) * disp / disp.norm_sqr()
         # particles[index].vel =ti.Vector([-n.y, n.x]) * v_norm
 
@@ -175,7 +168,10 @@ def mesh_init():
         meshs[i].p0 = ti_faces[i].x
         meshs[i].p1 = ti_faces[i].y
         meshs[i].p2 = ti_faces[i].z
-
+        a, b, c = ti_faces[i].x, ti_faces[i].y, ti_faces[i].z
+        p_a, p_b, p_c = particles[a].pos, particles[b].pos, particles[c].pos
+        r = ti.Matrix.cols([p_b - p_a, p_c - p_a])
+        meshs[i].ref = ti.math.inverse(r)
 
 @ti.kernel
 def fem():
@@ -219,17 +215,19 @@ if __name__ == '__main__':
     mesh_init()
     frame_cnt = 0
     while gui.running:
+
         frame_cnt+=1
         # if frame_cnt == 120:
         #     particles[2].pos = center + ti.Vector([0.1, 0.1])
-        for i in range(10):
+        U[None] = 0
+        for i in range(50):
             if not auto_diff:
                 fem()
             else:
                 with ti.ad.Tape(loss=U):
                     compute_energy()
             kinematic_mesh()
-            U[None] = 0
+
         # for i in range(particle_cnt):
         #     begin = particles[i].pos
         #     end = particles[(i+1)%particle_cnt].pos
@@ -242,6 +240,14 @@ if __name__ == '__main__':
         #     gui.line(p1, p2, radius=1, color=0xFF0000)
         #     gui.line(p2, p0, radius=1, color=0xFF0000)
 
-        gui.circles(particles.pos.to_numpy(), radius=2, color=0x00FF00)
-        gui.circle([0.5, 0.5], color=0xFF0000, radius=block_radius * width)
+        pos_ = particles.pos.to_numpy()
+        phi_ = phi.to_numpy()
+        # if U[None] > 0:
+        #     phi_ /= U[None]
+
+        base_ = 0.13
+
+        gui.triangles(a=pos_[meshs.p0.to_numpy()], b=pos_[meshs.p1.to_numpy()], c=pos_[meshs.p2.to_numpy()], color=ti.rgb_to_hex([phi_+base_, base_, base_]))
+        gui.circles(pos_, radius=2, color=0xAAAA00)
+        gui.circle(block_center, color=0x343434, radius=block_radius * width)
         gui.show()
