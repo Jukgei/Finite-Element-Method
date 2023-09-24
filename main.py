@@ -16,7 +16,7 @@ damping = 14.5
 center = ti.Vector([0.72, 0.8])
 # center = ti.Vector([0.55, 0.3])
 v_refect = -0.3
-delta_time = 5e-4
+delta_time = 5e-5
 side_length = 0.2  #
 subdivisions = 10  #
 A = ((side_length / subdivisions) ** 2) / 2
@@ -82,20 +82,25 @@ def compute_energy():
         X = ti.Matrix.cols([p10, p20])
         R_inv = mesh.ref
         F = X @ R_inv
-        # G = 0.5 * (F.transpose() @ F - I)
         S = ti.abs(p10.cross(p20))
         # K = G.transpose() @ G
         # U[None] += S * (0.5 * s_lambda * G.trace() **2 + mu * K.trace())
 
         # Neo-Hookean
-        F_i = F
-        log_J_i = ti.log(F_i.determinant())
-        phi_i = mu / 2 * ((F_i.transpose() @ F_i).trace() - 2)
-        phi_i -= mu * log_J_i
-        phi_i += s_lambda / 2 * log_J_i ** 2
+        # F_i = F
+        # log_J_i = ti.log(F_i.determinant())
+        # phi_i = mu / 2 * ((F_i.transpose() @ F_i).trace() - 2)
+        # phi_i -= mu * log_J_i
+        # phi_i += s_lambda / 2 * log_J_i ** 2
+        # phi[i] = phi_i * S
+        # U[None] += S * phi_i
+
+        # StVK
+        G = 0.5 * (F.transpose() @ F - I)
+        phi_i = (G ** 2).sum() * mu
+        phi_i += s_lambda * G.trace() **2
         phi[i] = phi_i * S
         U[None] += S * phi_i
-
 
 @ti.kernel
 def kinematic_mesh():
