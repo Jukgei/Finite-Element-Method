@@ -47,7 +47,7 @@ v_refect = -0.3
 side_length = 0.2  #
 subdivisions = 10  #
 
-auto_diff = True
+auto_diff = False
 
 if dim == 2:
     x = np.linspace(0, side_length, subdivisions + 1)  #
@@ -217,7 +217,7 @@ def kinematic(index: ti.int32, dt: ti.f32):
                                  particles[index].mass) * dt
         # particles[index].vel += (particles[index].acc + 9.8 * ti.Vector(g_dir)) * dt
     else:
-        particles[index].vel += (particles[index].acc + 9.8 * ti.Vector(g_dir) + particles[index].force / particles[index].mass) * dt
+        particles[index].vel += (particles[index].acc + 9.8 * ti.Vector(g_dir) - particles[index].force / particles[index].mass) * dt
     #
 
     particles[index].vel *= ti.exp(-dt * damping)
@@ -271,38 +271,88 @@ def mesh_init():
         indices[i * 3 + 1] = ti_faces[i][1]
         indices[i * 3 + 2] = ti_faces[i][2]
 
-@ti.kernel
-def fem():
-    for i in range(mesh_cnt):
-        mesh = meshs[i]
-        p0 = particles[mesh.p0]
-        p1 = particles[mesh.p1]
-        p2 = particles[mesh.p2]
-        pos = particles[mesh.p0].pos
-        ref_pos = p0.ref_pos
-        x1_pos = particles[mesh.p1].pos
-        x1_ref_pos = p1.ref_pos
-        x2_pos = particles[mesh.p2].pos
-        x2_ref_pos = p2.ref_pos
-        x10 = x1_pos - pos
-        x20 = x2_pos - pos
-        r10 = x1_ref_pos - ref_pos
-        r20 = x2_ref_pos - ref_pos
-        I = mat([1, 0, 0, 1])
-        X = mat([x10.x, x20.x, x10.y, x20.y])
-        R = mat([r10.x, r20.x, r10.y, r20.y])
-        R_inv = ti.math.inverse(R)
-        F = X @ R_inv
-        G = 0.5 * (F.transpose() @ F - I)
-        S = 2 * mu * G + s_lambda * G.trace() * I
-        force = - A * F @ S @ R_inv.transpose()
-        f1 = vec(force[:, 0])
-        f2 = vec(force[:, 1])
-        f0 = - f1 - f2
-        particles[mesh.p0].force += f0
-        particles[mesh.p1].force += f1
-        particles[mesh.p2].force += f2
+# @ti.kernel
+# def fem():
+#     for i in range(mesh_cnt):
+#         mesh = meshs[i]
+#         p0 = particles[mesh.p0]
+#         p1 = particles[mesh.p1]
+#         p2 = particles[mesh.p2]
+#         pos = particles[mesh.p0].pos
+#         ref_pos = p0.ref_pos
+#         x1_pos = particles[mesh.p1].pos
+#         x1_ref_pos = p1.ref_pos
+#         x2_pos = particles[mesh.p2].pos
+#         x2_ref_pos = p2.ref_pos
+#         x10 = x1_pos - pos
+#         x20 = x2_pos - pos
+#         r10 = x1_ref_pos - ref_pos
+#         r20 = x2_ref_pos - ref_pos
+#         I = mat([1, 0, 0, 1])
+#         X = mat([x10.x, x20.x, x10.y, x20.y])
+#         R = mat([r10.x, r20.x, r10.y, r20.y])
+#         R_inv = ti.math.inverse(R)
+#         F = X @ R_inv
+#         G = 0.5 * (F.transpose() @ F - I)
+#         S = 2 * mu * G + s_lambda * G.trace() * I
+#         force = - A * F @ S @ R_inv.transpose()
+#         f1 = vec(force[:, 0])
+#         f2 = vec(force[:, 1])
+#         f0 = - f1 - f2
+#         particles[mesh.p0].force += f0
+#         particles[mesh.p1].force += f1
+#         particles[mesh.p2].force += f2
 
+
+def fem():
+    neo_hookean()
+
+@ti.kernel
+def neo_hookean():
+    for i in range(element_cnt):
+        element = elements[i]
+        p_0 = particles[element.vertex_indices.x].pos
+        X = mat(0)
+        # if i == 1:
+        #     print('p_0', p_0)
+        for j in ti.static(range(dim)):
+            if j + 1 <= dim:
+                p_j = particles.pos[element.vertex_indices[j + 1]]
+                X[:, j] = p_j - p_0
+                # if i == 1:
+                #     print('p_{}: {}'.format(j+1, p_j))
+
+        R_inv = element.ref
+        F = X @ R_inv
+        V = compute_volume(X)
+        F_inv = R_inv @ ti.math.inverse(F)
+        force = mu * F @ R_inv.transpose() + (- mu * F_inv).transpose() + (s_lambda * ti.log(F.determinant()) * F_inv).transpose()
+        force *= V
+
+        log_J_i = ti.log(F.determinant())
+        phi_i = mu / 2 * ((F.transpose() @ F).trace() - dim)
+        phi_i -= mu * log_J_i
+        phi_i += s_lambda / 2 * log_J_i ** 2
+
+        # factor = 1 / math.factorial(dim)
+        factor = 1 / 6
+
+        p10, p20, p30 = vec(X[:, 0]), vec(X[:, 1]), vec(X[:, 2])
+        V_t = p10.dot(p20.cross(p30))
+        if V_t < 0:
+            n = p20.cross(p30).normalized()
+            l = p10.dot(n)
+            p10 = 2 * l * n - p10
+
+        f1 = vec(force[:, 0]) + factor * p20.cross(p30) * phi_i
+        f2 = vec(force[:, 1]) + factor * p10.cross(p30) * phi_i
+        f3 = vec(force[:, 2]) + factor * p10.cross(p20) * phi_i
+        f0 = -f1 - f2 - f3
+        p0, p1, p2, p3 = element.vertex_indices
+        particles.force[p0] += f0 
+        particles.force[p1] += f1 
+        particles.force[p2] += f2 
+        particles.force[p3] += f3 
         # print(f1, particles[mesh.p1].pos, particles[mesh.p1].force)
         # if ti.math.isnan(f1[0]):
         #     print(F, S)
@@ -362,6 +412,9 @@ if __name__ == '__main__':
     mesh_init()
     elements_init()
     frame_cnt = 0
+    # element = elements[1]
+    # x, y, z, w = element.vertex_indices
+    # print('{}, {}, {}, {}'.format(particles.pos[x], particles.pos[y], particles.pos[z], particles.pos[w]))
     while widget.running:
         if widget.is_pressed('c'):
             print('Camera position [{}]'.format(', '.join('{:.2f}'.format(x) for x in camera.curr_position)))
