@@ -9,20 +9,18 @@ import solver.kinematic as ki
 
 ti.init(ti.gpu, debug=False, device_memory_fraction=0.7, kernel_profiler=True)
 
-dim = 3
+dim = 2
 if dim == 2:
 	vec = ti.math.vec2
 	mat = ti.math.mat2
-	matA = ti.types.matrix(dim**2, dim**2, ti.f32)
-	vecb = ti.types.vector(dim**2, ti.f32)
 	index = ti.math.ivec3
 else: # 3d
 	vec = ti.math.vec3
 	mat = ti.math.mat3
-	matA = ti.types.matrix(dim**2, dim**2, ti.f32)
-	vecb = ti.types.vector(dim**2, ti.f32)
-
 	index = ti.math.ivec4
+
+matA = ti.types.matrix(dim**2, dim**2, ti.f32)
+vecb = ti.types.vector(dim**2, ti.f32)
 
 # dim_ndarray = ti.types.ndarray
 width = 640
@@ -56,7 +54,7 @@ v_refect = -0.3
 side_length = 0.2  #
 subdivisions = 10  #
 
-auto_diff = False
+auto_diff = True
 
 if dim == 2:
 	x = np.linspace(0, side_length, subdivisions + 1)  #
