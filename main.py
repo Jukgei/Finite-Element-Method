@@ -9,7 +9,7 @@ import solver.kinematic as ki
 
 ti.init(ti.gpu, debug=False, device_memory_fraction=0.7, kernel_profiler=True)
 
-dim = 2
+dim = 3
 if dim == 2:
 	vec = ti.math.vec2
 	mat = ti.math.mat2
@@ -56,7 +56,7 @@ v_refect = -0.3
 side_length = 0.2  #
 subdivisions = 10  #
 
-auto_diff = True
+auto_diff = False
 
 if dim == 2:
 	x = np.linspace(0, side_length, subdivisions + 1)  #
@@ -174,6 +174,7 @@ print('Element mass: {}'.format(mass))
 # import solver.explicit_auto_diff as
 import utils
 from solver.explicit_auto_diff import compute_energy
+from solver.explicit import neo_hookean_1_grad
 
 @ti.func
 def compute_volume(x: mat) -> ti.f32:
@@ -240,8 +241,8 @@ def fem_implicit():
 	advect_implicit()
 
 def fem():
-	neo_hookean_1_grad()
-	neo_hookean_2_grad(tensors, tensors_com)
+	neo_hookean_1_grad(particles, elements)
+	# neo_hookean_2_grad(tensors, tensors_com)
 	# print(tensors.to_numpy())
 	# solve()
 
@@ -465,51 +466,6 @@ def advect_implicit():
 
 		particles.pos[index] += v * delta_time
 
-@ti.kernel
-def neo_hookean_1_grad():
-	for i in range(element_cnt):
-		element = elements[i]
-		p_0 = particles[element.vertex_indices.x].pos
-		X = mat(0)
-		for j in ti.static(range(dim)):
-			if j + 1 <= dim:
-				p_j = particles.pos[element.vertex_indices[j + 1]]
-				X[:, j] = p_j - p_0
-
-		R_inv = element.ref
-		F = X @ R_inv
-		V = compute_volume(X)
-		R_inv_F_inv = R_inv @ ti.math.inverse(F)
-		force = mu * F @ R_inv.transpose() + (- mu * R_inv_F_inv).transpose() + (s_lambda * ti.log(F.determinant()) * R_inv_F_inv).transpose()
-		force *= V
-
-		log_J_i = ti.log(F.determinant())
-		phi_i = mu / 2 * ((F.transpose() @ F).trace() - dim)
-		phi_i -= mu * log_J_i
-		phi_i += s_lambda / 2 * log_J_i ** 2
-
-		# factor = 1 / math.factorial(dim)
-		# factor = 1 / 6
-		#
-		# p10, p20, p30 = vec(X[:, 0]), vec(X[:, 1]), vec(X[:, 2])
-		# V_t = p10.dot(p20.cross(p30))
-		# if V_t < 0:
-		#     n = p20.cross(p30).normalized()
-		#     l = p10.dot(n)
-		#     p10 = 2 * l * n - p10
-
-		f1 = vec(force[:, 0])# + factor * p20.cross(p30) * phi_i
-		f2 = vec(force[:, 1])# + factor * p10.cross(p30) * phi_i
-		f3 = vec(force[:, 2])# + factor * p10.cross(p20) * phi_i
-		f0 = -f1 - f2 - f3
-		p0, p1, p2, p3 = element.vertex_indices
-		particles.force[p0] += f0
-		particles.force[p1] += f1
-		particles.force[p2] += f2
-		particles.force[p3] += f3
-		# print(f1, particles[mesh.p1].pos, particles[mesh.p1].force)
-		# if ti.math.isnan(f1[0]):
-		#     print(F, S)
 
 def render2d(gui):
 	pos_ = particles.pos.to_numpy()
