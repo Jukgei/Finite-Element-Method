@@ -9,7 +9,7 @@ import solver.kinematic as ki
 
 ti.init(ti.gpu, debug=False, device_memory_fraction=0.7, kernel_profiler=True)
 
-dim = 2
+dim = 3
 if dim == 2:
 	vec = ti.math.vec2
 	mat = ti.math.mat2
@@ -157,11 +157,9 @@ mesh_cnt = faces.shape[0]
 element_cnt = element_indices.shape[0]
 meshs = Mesh.field(shape=mesh_cnt)
 elements = Element.field(shape=element_cnt)
-# tensors = ti.field(ti.f32, shape=(element_cnt, dim, dim, dim, dim))
 tensors = ti.ndarray(dtype=mat, shape=(element_cnt, dim, dim))
 tensors_com = ti.ndarray(dtype=mat, shape=(element_cnt, dim, dim))
 tensors_type = ti.types.ndarray(dtype=ti.math.mat3, ndim=3)
-# tensors_cache = ti.types.ndarray(dtype=mat, ndim=(element_cnt, dim, dim))
 tensors_cache = ti.field(dtype=ti.f32, shape=(element_cnt, dim, dim, dim, dim))
 particles = Particle.field(shape=particle_cnt, needs_grad=True)
 print('Vertex count: {}'.format(particle_cnt))
@@ -173,25 +171,7 @@ print('Element mass: {}'.format(mass))
 import utils
 from solver.explicit_auto_diff import compute_energy
 from solver.explicit import neo_hookean_1_grad
-
-@ti.func
-def compute_volume(x: mat) -> ti.f32:
-	m = ti.math.mat3(0)
-	V = 0.0
-	for i in ti.static(range(x.m)):
-		for j in ti.static(range(x.n)):
-			m[i, j] = x[i, j]
-
-	p0 = m[:, 0]
-	p1 = m[:, 1]
-	p2 = m[:, 2]
-
-	if dim == 2:
-		V = ti.abs(p0.cross(p1).norm()) / 2
-	else:
-		V = (1/6) * ti.abs(p0.dot(p1.cross(p2)))
-	return V
-
+from render import render
 
 @ti.kernel
 def particles_init():
@@ -465,35 +445,6 @@ def advect_implicit():
 		particles.pos[index] += v * delta_time
 
 
-def render2d(gui):
-	pos_ = particles.pos.to_numpy()
-	phi_ = phi.to_numpy()
-
-	base_ = 0.13
-	gui.triangles(a=pos_[meshs.p0.to_numpy()], b=pos_[meshs.p1.to_numpy()], c=pos_[meshs.p2.to_numpy()],
-				  color=ti.rgb_to_hex([phi_ + base_, base_, base_]))
-	gui.circles(pos_, radius=2, color=0xAAAA00)
-	gui.circle(block_center, color=0x343434, radius=block_radius * width)
-	gui.show()
-
-def render3d(window, camera):
-
-	canvas = window.get_canvas()
-	scene = ti.ui.Scene()
-
-	# Camera & light
-	camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)
-	scene.set_camera(camera)
-	scene.ambient_light((0.8, 0.8, 0.8))
-	scene.point_light(pos=(3.5, 3.5, 3.5), color=(1, 1, 1))
-	scene.lines(box_vert, indices=box_lines_indices, color=(0.99, 0.68, 0.28), width=2.0)
-	pos_ = particles.pos.to_numpy()
-
-	# scene.particles(particles.pos, color=(1.0, 1.0, 1), radius=.0001)
-	scene.mesh(particles.pos, indices, show_wireframe=True)
-	canvas.scene(scene)
-	window.show()
-
 if __name__ == '__main__':
 	# utils.neo_hookean_3d_2ord()
 	# testt(tensors)
@@ -552,6 +503,6 @@ if __name__ == '__main__':
 			# fem_implicit()
 		debug1 = False
 		if dim == 2:
-			render2d(widget)
+			render.render2d(widget, particles, phi, meshs)
 		else:
-			render3d(widget, camera)
+			render.render3d(widget, camera, particles, box_vert, box_lines_indices, indices)
