@@ -1,15 +1,12 @@
 import taichi as ti
-from main import particle_cnt, delta_time, auto_diff, damping, dim, g_dir
-from main import block_radius, block_center, vec, Particle, Element, Mesh
+from main import delta_time, auto_diff, damping, dim, g_dir
+from main import block_radius, block_center, vec
+
 
 @ti.kernel
-def test():
-	print('tttt')
-
-@ti.kernel
-def kinematic(p: ti.template()):
-	for i in range(particle_cnt):
-		kinematic_particle(i, delta_time, p)
+def kinematic(obj: ti.template()):
+	for i in range(obj.particle_cnt):
+		kinematic_particle(i, delta_time, obj.particles)
 		# print('hhh')
 
 @ti.func
