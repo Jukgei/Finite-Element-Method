@@ -18,7 +18,7 @@ def neo_hookean_1_grad(obj: ti.template()):
 		R_inv = element.ref
 		F = X @ R_inv
 		V = utils.compute_volume(X)
-		R_inv_F_inv = R_inv @ ti.math.inverse(F)
+		R_inv_F_inv = ti.math.inverse(X)
 		force = mu * F @ R_inv.transpose() + (- mu * R_inv_F_inv).transpose() + (s_lambda * ti.log(F.determinant()) * R_inv_F_inv).transpose()
 		force *= V
 
@@ -26,7 +26,6 @@ def neo_hookean_1_grad(obj: ti.template()):
 		phi_i = mu / 2 * ((F.transpose() @ F).trace() - dim)
 		phi_i -= mu * log_J_i
 		phi_i += s_lambda / 2 * log_J_i ** 2
-
 		# factor = 1 / math.factorial(dim)
 		# factor = 1 / 6
 		#
