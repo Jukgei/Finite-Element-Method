@@ -72,7 +72,7 @@ def compute_linear_system_vector_b(obj: ti.template()):
 		particle_index = element.vertex_indices.x
 		for i in ti.static(range(dim)):
 			f[particle_index*dim+i] = f0[i]
-
+		# print('f is ', f)
 		M = 1.0 / obj.mass * ti.math.eye(dim*obj.particle_cnt)
 		ret += delta_time * M @ f
 	return ret
@@ -124,50 +124,95 @@ def compute_linear_system_matrix_a(obj: ti.template()):
 		# m4 = mat(0.0)
 		# m5 = mat(0.0)
 		# m6 = mat(0.0)
+		dF_dx00 = ti.types.matrix(dim, dim, ti.f32)(0.0)
+		temp = ti.types.matrix(dim, dim**2, ti.f32)(0.0)
+		for i in ti.static(range(dim)):
+			dF_dxi0 = ti.types.matrix(dim, dim, ti.f32)(0.0)
+			for j in ti.static(range(dim)):
+				dF = mat(0.0)
+				if i == j:
+					dF = ti.math.eye(dim)
+				# if i == 0 and j == 0:
+				# 	print('1',dF)
+				dF = dF@R_inv
+				dF_T = dF.transpose()
+				dF_dxij = mu * dF + (mu - s_lambda * log_J) * F_inv_T @ dF_T @ F_inv_T + s_lambda * (F_inv @ dF).trace() * F_inv_T
+				dF_dxij = -V * dF_dxij @ R_inv.transpose()
+				dF_dxij = (delta_time ** 2) * (1.0 / obj.mass * ti.math.eye(dim))@dF_dxij
+				dF_dx00 += dF_dxij
+				# TODO: test code
+				# if i == 0 and j == 0:
+				# 	m1 = dF_dxij
+				# 	print(m1)
+				# 	print(dF)
+				# elif i == 0 and j == 1:
+				# 	m2 = dF_dxij
+				# elif i == 1 and j == 0:
+				# 	m3 = dF_dxij
+				# elif i == 1 and j == 1:
+				# 	m4 = dF_dxij
+				rows = element.vertex_indices[i+1]
+				cols = element.vertex_indices[j+1]
+
+				for k in ti.static(range(dim)):
+					for l in ti.static(range(dim)):
+						ret[rows*dim + k, cols*dim + l] += dF_dxij[k, l]
+				dF_dxi0 -= dF_dxij
+
+				temp[0:dim, j*dim:j*dim+dim] -= dF_dxij
+
+			rows = element.vertex_indices[i+1]
+			cols = element.vertex_indices[0]
+			for m in ti.static(range(dim)):
+				for n in ti.static(range(dim)):
+					ret[rows*dim+m, cols*dim+n] += dF_dxi0[m, n]
+
+			# if i == 0:
+			# 	m5 = dF_dxi0
+			# elif i == 1:
+			# 	m6 = dF_dxi0
+
+		rows = element.vertex_indices[0]
+		cols = element.vertex_indices[0]
+		for i in ti.static(range(dim)):
+			for j in ti.static(range(dim)):
+				ret[rows*dim+i, cols*dim+j] += dF_dx00[i, j]
+
+		# dF0_dx1
+		# dF0_dx2
+		for i in ti.static(range(dim)):
+			r = element.vertex_indices[0]
+			c = element.vertex_indices[i+1]
+			for k in ti.static(range(dim)):
+				for l in ti.static(range(dim)):
+					ret[r*dim+k, c*dim+l] += temp[k, l+i*dim]
+		# TODO: BUG
 		# for i in ti.static(range(dim)):
-		# 	dF_dxi0 = ti.types.matrix(dim, dim, ti.f32)(0.0)
+		# 	dF0_dxn = ti.types.matrix(dim, dim, ti.f32)(0.0)
 		# 	for j in ti.static(range(dim)):
-		# 		dF = mat(0.0)
-		# 		if i == j:
-		# 			dF = ti.math.eye(dim)
-		# 		if i == 0 and j == 0:
-		# 			print('1',dF)
-		# 		dF = dF@R_inv
-		# 		dF_T = dF.transpose()
-		# 		dF_dxij = mu * dF + (mu - s_lambda * log_J) * F_inv_T @ dF_T @ F_inv_T + s_lambda * (F_inv @ dF).trace() * F_inv_T
-		# 		dF_dxij = -V * dF_dxij @ R_inv.transpose()
-		# 		dF_dxij = (delta_time ** 2) * (1.0 / obj.mass * ti.math.eye(dim))@dF_dxij
-		# 		# TODO: test code
-		# 		if i == 0 and j == 0:
-		# 			m1 = dF_dxij
-		# 			print(m1)
-		# 			print(dF)
-		# 		elif i == 0 and j == 1:
-		# 			m2 = dF_dxij
-		# 		elif i == 1 and j == 0:
-		# 			m3 = dF_dxij
-		# 		elif i == 1 and j == 1:
-		# 			m4 = dF_dxij
-		# 		rows = element.vertex_indices[i+1]
-		# 		cols = element.vertex_indices[j+1]
-		#
+		# 		rows = element.vertex_indices[j+1]
+		# 		cols = element.vertex_indices[i+1]
+		# 		print('i {}, j {}'.format(i, j))
 		# 		for k in ti.static(range(dim)):
 		# 			for l in ti.static(range(dim)):
-		# 				ret[rows*dim + k, cols*dim + l] += dF_dxij[k, l]
-		# #
-		# 		dF_dxi0 -= dF_dxij
-		#
-		# 	rows = element.vertex_indices[i+1]
-		# 	cols = element.vertex_indices[0]
-		# 	for k in ti.static(range(dim)):
-		# 		for l in ti.static(range(dim)):
-		# 			ret[rows*dim+k, cols*dim+l] += dF_dxi0[k, l]
-		#
-		# 	if i == 0:
-		# 		m5 = dF_dxi0
-		# 	elif i == 1:
-		# 		m6 = dF_dxi0
+		# 				# In this times, ret is the global memory
+		# 				dF0_dxn[k, l] -= ret[rows*dim+k, cols*dim+l]
+		# 				print(rows*dim+k, cols*dim+l, k, l, i, j)
+		# 	print('\n')
+		# 	r = element.vertex_indices[0]
+		# 	c = element.vertex_indices[i + 1]
+		# 	for m in ti.static(range(dim)):
+		# 		for n in ti.static(range(dim)):
+		# 			if r*dim+m == 0 and c*dim+n == 6:
+		# 				print('2', ret[r*dim+m, c*dim+n], dF0_dxn[m, n])
+		# 				print('3', dF0_dxn)
+		# 			ret[r*dim+m, c*dim+n] += dF0_dxn[m, n]
 
+		# for i in ti.static(range(dim)):
+		# 	rows = element.vertex_indices[0]
+		# 	cols = element.vertex_indices[i+1]
+		# 	for j in ti.static(range(dim)):
+		# 		pass
 		# for i in ti.static(range(dim)):
 		# 	for j in ti.static(range(dim)):
 		# 		rows = element.vertex_indices[i + 1]
@@ -180,128 +225,130 @@ def compute_linear_system_matrix_a(obj: ti.template()):
 		# 		rows = element.vertex_indices[i + 1]
 		# 		cols = element.vertex_indices[j + 1]
 
-		dF = mat(1, 0, 0, 1)@R_inv
-		dF_T = dF.transpose()
-		F_inv_T = F_inv.transpose()
-		m1 = mat(0.0)
-		m1 = mu * dF + (mu - s_lambda * log_J) * F_inv_T@dF_T@F_inv_T + s_lambda * (F_inv@dF).trace() * F_inv_T
-		m1 = -V * m1 @ R_inv.transpose()
-		# # m1 = (delta_time ** 2) * M @ m1
-		# # if ti.math.isnan(m1[0, 0]):
-		# # 	print('dfasdf', F.determinant())
-		m1 = (delta_time ** 2) * (1.0 / obj.mass * ti.math.eye(dim))@m1
-		print(m1)
-		print(dF)
-		ret[2, 2] += m1[0, 0]
-		ret[3, 2] += m1[1, 0]
-		ret[2, 3] += m1[0, 1]
-		ret[3, 3] += m1[1, 1]
+		# dF = mat(1, 0, 0, 1)@R_inv
+		# dF_T = dF.transpose()
+		# F_inv_T = F_inv.transpose()
+		# m1 = mat(0.0)
+		# m1 = mu * dF + (mu - s_lambda * log_J) * F_inv_T@dF_T@F_inv_T + s_lambda * (F_inv@dF).trace() * F_inv_T
+		# m1 = -V * m1 @ R_inv.transpose()
+		# # # m1 = (delta_time ** 2) * M @ m1
+		# # # if ti.math.isnan(m1[0, 0]):
+		# # # 	print('dfasdf', F.determinant())
+		# m1 = (delta_time ** 2) * (1.0 / obj.mass * ti.math.eye(dim))@m1
+		# print(m1)
+		# print(dF)
+		# ret[2, 2] += m1[0, 0]
+		# ret[3, 2] += m1[1, 0]
+		# ret[2, 3] += m1[0, 1]
+		# ret[3, 3] += m1[1, 1]
+		#
+		#
+		# dF = mat(0, 0, 0, 0) @ R_inv
+		# dF_T = dF.transpose()
+		# F_inv_T = F_inv.transpose()
+		# m2 = mat(0.0)
+		# m2 = mu * dF + (mu - s_lambda * log_J) * F_inv_T @ dF_T @ F_inv_T + s_lambda * (
+		# 			F_inv @ dF).trace() * F_inv_T
+		# m2 = -V * m2 @ R_inv.transpose()
+		# m2 = (delta_time ** 2) * (1.0 / obj.mass * ti.math.eye(dim)) @ m2
+		# # m2 = (delta_time ** 2) * M @ m2
+		# ret[2, 4] += m2[0, 0]
+		# ret[3, 4] += m2[1, 0]
+		# ret[2, 5] += m2[0, 1]
+		# ret[3, 5] += m2[1, 1]
+		#
+		#
+		# dF = mat(0, 0, 0, 0) @ R_inv
+		# dF_T = dF.transpose()
+		# F_inv_T = F_inv.transpose()
+		# m3 = mat(0.0)
+		# m3 = mu * dF + (mu - s_lambda * log_J) * F_inv_T @ dF_T @ F_inv_T + s_lambda * (
+		# 			F_inv @ dF).trace() * F_inv_T
+		# m3 = -V * m3 @ R_inv.transpose()
+		# m3 = (delta_time ** 2) * (1.0 / obj.mass * ti.math.eye(dim)) @ m3
+		# # m3 = (delta_time ** 2) * M @ m3
+		# ret[4, 2] += m3[0, 0]
+		# ret[5, 2] += m3[1, 0]
+		# ret[4, 3] += m3[0, 1]
+		# ret[5, 3] += m3[1, 1]
+		#
+		#
+		# dF = mat(1, 0, 0, 1) @ R_inv
+		# dF_T = dF.transpose()
+		# F_inv_T = F_inv.transpose()
+		# m4 = mat(0.0)
+		# m4 = mu * dF + (mu - s_lambda * log_J) * F_inv_T @ dF_T @ F_inv_T + s_lambda * (
+		# 		F_inv @ dF).trace() * F_inv_T
+		# m4 = -V * m4 @ R_inv.transpose()
+		# m4 = (delta_time ** 2) * (1.0 / obj.mass * ti.math.eye(dim)) @ m4
+		# # m4 = (delta_time ** 2) * M @ m4
+		# ret[4, 4] += m4[0, 0]
+		# ret[5, 4] += m4[1, 0]
+		# ret[4, 5] += m4[0, 1]
+		# ret[5, 5] += m4[1, 1]
+		#
+		#
+		# dF = mat(-1, 0, 0, -1) @ R_inv
+		# dF_T = dF.transpose()
+		# F_inv_T = F_inv.transpose()
+		# m5 = mat(0.0)
+		# m5 = mu * dF + (mu - s_lambda * log_J) * F_inv_T @ dF_T @ F_inv_T + s_lambda * (
+		# 			F_inv @ dF).trace() * F_inv_T
+		# m5 = -V * m5 @ R_inv.transpose()
+		# m5 = (delta_time ** 2) * (1.0 / obj.mass * ti.math.eye(dim)) @ m5
+		# # m5 = (delta_time ** 2) * M @ m5
+		# ret[2, 0] += m5[0, 0]
+		# ret[3, 0] += m5[1, 0]
+		# ret[2, 1] += m5[0, 1]
+		# ret[3, 1] += m5[1, 1]
+		#
+		#
+		# dF = mat(-1, 0, 0, -1) @ R_inv
+		# dF_T = dF.transpose()
+		# F_inv_T = F_inv.transpose()
+		# m6 = mat(0.0)
+		# m6 = mu * dF + (mu - s_lambda * log_J) * F_inv_T @ dF_T @ F_inv_T + s_lambda * (
+		# 		F_inv @ dF).trace() * F_inv_T
+		# m6 = -V * m6 @ R_inv.transpose()
+		# m6 = (delta_time ** 2) * (1.0 / obj.mass * ti.math.eye(dim)) @ m6
+		# # m6 = (delta_time ** 2) * M @ m6
+		# ret[4, 0] += m6[0, 0]
+		# ret[5, 0] += m6[1, 0]
+		# ret[4, 1] += m6[0, 1]
+		# ret[5, 1] += m6[1, 1]
 
-
-		dF = mat(0, 0, 0, 0) @ R_inv
-		dF_T = dF.transpose()
-		F_inv_T = F_inv.transpose()
-		m2 = mat(0.0)
-		m2 = mu * dF + (mu - s_lambda * log_J) * F_inv_T @ dF_T @ F_inv_T + s_lambda * (
-					F_inv @ dF).trace() * F_inv_T
-		m2 = -V * m2 @ R_inv.transpose()
-		m2 = (delta_time ** 2) * (1.0 / obj.mass * ti.math.eye(dim)) @ m2
-		# m2 = (delta_time ** 2) * M @ m2
-		ret[2, 4] += m2[0, 0]
-		ret[3, 4] += m2[1, 0]
-		ret[2, 5] += m2[0, 1]
-		ret[3, 5] += m2[1, 1]
-
-
-		dF = mat(0, 0, 0, 0) @ R_inv
-		dF_T = dF.transpose()
-		F_inv_T = F_inv.transpose()
-		m3 = mat(0.0)
-		m3 = mu * dF + (mu - s_lambda * log_J) * F_inv_T @ dF_T @ F_inv_T + s_lambda * (
-					F_inv @ dF).trace() * F_inv_T
-		m3 = -V * m3 @ R_inv.transpose()
-		m3 = (delta_time ** 2) * (1.0 / obj.mass * ti.math.eye(dim)) @ m3
-		# m3 = (delta_time ** 2) * M @ m3
-		ret[4, 2] += m3[0, 0]
-		ret[5, 2] += m3[1, 0]
-		ret[4, 3] += m3[0, 1]
-		ret[5, 3] += m3[1, 1]
-
-
-		dF = mat(1, 0, 0, 1) @ R_inv
-		dF_T = dF.transpose()
-		F_inv_T = F_inv.transpose()
-		m4 = mat(0.0)
-		m4 = mu * dF + (mu - s_lambda * log_J) * F_inv_T @ dF_T @ F_inv_T + s_lambda * (
-				F_inv @ dF).trace() * F_inv_T
-		m4 = -V * m4 @ R_inv.transpose()
-		m4 = (delta_time ** 2) * (1.0 / obj.mass * ti.math.eye(dim)) @ m4
-		# m4 = (delta_time ** 2) * M @ m4
-		ret[4, 4] += m4[0, 0]
-		ret[5, 4] += m4[1, 0]
-		ret[4, 5] += m4[0, 1]
-		ret[5, 5] += m4[1, 1]
-
-
-		dF = mat(-1, 0, 0, -1) @ R_inv
-		dF_T = dF.transpose()
-		F_inv_T = F_inv.transpose()
-		m5 = mat(0.0)
-		m5 = mu * dF + (mu - s_lambda * log_J) * F_inv_T @ dF_T @ F_inv_T + s_lambda * (
-					F_inv @ dF).trace() * F_inv_T
-		m5 = -V * m5 @ R_inv.transpose()
-		m5 = (delta_time ** 2) * (1.0 / obj.mass * ti.math.eye(dim)) @ m5
-		# m5 = (delta_time ** 2) * M @ m5
-		ret[2, 0] += m5[0, 0]
-		ret[3, 0] += m5[1, 0]
-		ret[2, 1] += m5[0, 1]
-		ret[3, 1] += m5[1, 1]
-
-
-		dF = mat(-1, 0, 0, -1) @ R_inv
-		dF_T = dF.transpose()
-		F_inv_T = F_inv.transpose()
-		m6 = mat(0.0)
-		m6 = mu * dF + (mu - s_lambda * log_J) * F_inv_T @ dF_T @ F_inv_T + s_lambda * (
-				F_inv @ dF).trace() * F_inv_T
-		m6 = -V * m6 @ R_inv.transpose()
-		m6 = (delta_time ** 2) * (1.0 / obj.mass * ti.math.eye(dim)) @ m6
-		# m6 = (delta_time ** 2) * M @ m6
-		ret[4, 0] += m6[0, 0]
-		ret[5, 0] += m6[1, 0]
-		ret[4, 1] += m6[0, 1]
-		ret[5, 1] += m6[1, 1]
-
-		m7 = -m1-m3
-		ret[0, 2] += m7[0, 0]
-		ret[1, 2] += m7[1, 0]
-		ret[0, 3] += m7[0, 1]
-		ret[1, 3] += m7[1, 1]
-
-		m8 = -m2 - m4
-		ret[0, 4] += m8[0, 0]
-		ret[1, 4] += m8[1, 0]
-		ret[0, 5] += m8[0, 1]
-		ret[1, 5] += m8[1, 1]
-
-		m9 = -m8-m7
-		ret[0, 0] += m9[0, 0]
-		ret[1, 0] += m9[1, 0]
-		ret[0, 1] += m9[0, 1]
-		ret[1, 1] += m9[1, 1]
+		# m7 = -m1-m3
+		# ret[0, 2] += m7[0, 0]
+		# ret[1, 2] += m7[1, 0]
+		# ret[0, 3] += m7[0, 1]
+		# ret[1, 3] += m7[1, 1]
+		#
+		# m8 = -m2 - m4
+		# ret[0, 4] += m8[0, 0]
+		# ret[1, 4] += m8[1, 0]
+		# ret[0, 5] += m8[0, 1]
+		# ret[1, 5] += m8[1, 1]
+		#
+		# m9 = -m8-m7
+		# ret[0, 0] += m9[0, 0]
+		# ret[1, 0] += m9[1, 0]
+		# ret[0, 1] += m9[0, 1]
+		# ret[1, 1] += m9[1, 1]
 	# ret = (delta_time ** 2) * (1.0 / obj.mass * ti.math.eye(dim * 3)) @ ret
 	ret = ti.math.eye(obj.particle_cnt * dim) - ret
 	return ret
 
 
 @ti.kernel
-def neo_hookean_2_grad(obj: ti.template()) -> ti.types.matrix(6, 6, ti.f32):
+def neo_hookean_2_grad(obj: ti.template()) -> ti.types.matrix(8, 8, ti.f32):
 	# ret = ti.Matrix([[0.0 for _ in ti.static(range(dim ** 2))] for __ in range(dim ** 2)])
 	# print('Once!')
 	A = compute_linear_system_matrix_a(obj)
 	b = compute_linear_system_vector_b(obj)
 	# v = b
 	v = jacobi_iter(A, b)
+	# print(v)
+	# print(b)
 	# x = b
 	# print(b)
 	# print(x)
@@ -423,11 +470,11 @@ def jacobi_iter(A: ti.template(), b:ti.template()):
 	x = b
 	err = (A@x - b).norm()
 	threshold = 1e-5
-	max_iter = 20
+	max_iter = 200
 	# last_err = 0
 	# ti.loop_config(serialize=True)
 	while err > threshold and iter_cnt < max_iter:
-		for i in ti.static(range(dim*3)):
+		for i in ti.static(range(dim*4)):
 			if ti.abs(A[i, i]) < 1e-6:
 				# print('i {} is {}, index {}'.format(i, A[i, i], index))
 				print('aaaaaaaaaaaaaaaaaaaa')
@@ -453,7 +500,7 @@ def jacobi_iter(A: ti.template(), b:ti.template()):
 		# if index == 1:
 		# print('iter cnt: {}, loss {}, x {}'.format(iter_cnt, err, x))
 		# print(b)
-		# print('iter cnt: {}, loss {}'.format(iter_cnt, err))
+		print('iter cnt: {}, loss {}'.format(iter_cnt, err))
 
 	# print('iter cnt: {}, loss {}, x {}'.format(iter_cnt, err, x))
 	print('iter cnt: {}, loss {}'.format(iter_cnt, err))
