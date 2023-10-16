@@ -1,6 +1,7 @@
 # coding=utf-8
-
+import numpy as np
 import taichi as ti
+import time
 import solver.kinematic as ki
 
 ti.init(ti.gpu, debug=False, device_memory_fraction=0.7, kernel_profiler=True)
@@ -15,9 +16,6 @@ else: # 3d
 	mat = ti.math.mat3
 	index = ti.math.ivec4
 
-matA = ti.types.matrix(dim**2, dim**2, ti.f32)
-vecb = ti.types.vector(dim**2, ti.f32)
-
 width = 640
 height = 640
 
@@ -26,8 +24,10 @@ if dim == 2:
 	block_center = [0.5, 0.5]
 	center = ti.Vector([0.72, 0.8])
 	g_dir = [0, -1]
+	# g_dir = [0, 0]
 	block_radius = 0.33
-	delta_time = 5e-5
+	# delta_time = 2e-2
+	delta_time = 5e-4
 	damping = 14.5
 	rho = 500
 else:
@@ -43,14 +43,8 @@ else:
 E, nu = 4e4, 0.2  # Young's modulus and Poisson's ratio
 mu, s_lambda = E / 2 / (1 + nu), E * nu / (1 + nu) / (1 - 2 * nu)
 
-# center = ti.Vector([0.55, 0.3])
-v_refect = -0.3
-# delta_time = 5e-4
-# side_length = 0.2  #
-# subdivisions = 10  #
-
 auto_diff = False
-
+explicit_method = False
 
 if dim == 3:
 	# Boundary Box
@@ -74,24 +68,18 @@ if dim == 3:
 import utils
 from solver.explicit_auto_diff import compute_energy
 from solver.explicit import neo_hookean_1_grad
+from solver.implicit import implicit_solver_neo_hookean, advect_implicit
 from render import render
 from object import Object
 
 def fem(soft_obj):
-	neo_hookean_1_grad(soft_obj)
-# 	neo_hookean_2_grad(tensors, tensors_com)
-# 	print(tensors.to_numpy())
-# 	solve()
+	if explicit_method:
+		neo_hookean_1_grad(soft_obj)
+	else:
+		implicit_solver_neo_hookean(soft_obj)
 
 
 if __name__ == '__main__':
-	# utils.neo_hookean_3d_2ord()
-	# testt(tensors)
-	# a = tensors.to_numpy()
-	# b = a[0]
-	# print(b)
-	# m = test()
-	# print(m.to_numpy())
 	if dim == 2:
 		gui = ti.GUI('Finite Element Method', (width, height))
 		widget = gui
@@ -114,22 +102,39 @@ if __name__ == '__main__':
 
 	frame_cnt = 0
 	soft_obj = Object()
+	run = True
+	now_frame = 0
 	while widget.running:
+		widget.get_event()
 		if widget.is_pressed('c'):
 			print('Camera position [{}]'.format(', '.join('{:.2f}'.format(x) for x in camera.curr_position)))
 			print('Camera look at [{}]'.format(', '.join('{:.2f}'.format(x) for x in camera.curr_lookat)))
 			print('Camera up [{}]'.format(', '.join('{:.2f}'.format(x) for x in camera.curr_up)))
-		frame_cnt+=1
-		for i in range(50):
-			if not auto_diff:
-				fem(soft_obj)
-			else:
-				# if frame_cnt == 1:
-				with ti.ad.Tape(loss=soft_obj.U):
-					# compute_energy()
-					compute_energy(soft_obj)
-			ki.kinematic(soft_obj)
-		debug1 = False
+		frame_cnt += 1
+		if widget.is_pressed('r') and frame_cnt - now_frame > 20:
+			print('Press R')
+			run = True
+			now_frame = frame_cnt
+		if widget.is_pressed('p'):
+			run = False
+		# if frame_cnt == 3:
+		# 	soft_obj.particles.pos[0].y -= 2.5e-1
+		# 	print('drag')
+		if run:
+
+			for i in range(10):
+				if not auto_diff:
+					fem(soft_obj)
+				else:
+					with ti.ad.Tape(loss=soft_obj.U):
+						compute_energy(soft_obj)
+				if explicit_method:
+					ki.kinematic(soft_obj)
+				else:
+					advect_implicit(soft_obj)
+				# ti.profiler.print_kernel_profiler_info()
+				# ti.profiler.clear_kernel_profiler_info()
+
 		if dim == 2:
 			render.render2d(widget, soft_obj)
 		else:

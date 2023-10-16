@@ -1,8 +1,6 @@
 # coding=utf-8
 
 import taichi as ti
-# from main import indices
-# from main import particles, phi, meshs
 from main import block_center, block_radius, width
 
 

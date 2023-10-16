@@ -161,132 +161,18 @@ def compute_linear_system_matrix_a(obj: ti.template()):
 
 
 @ti.kernel
-def neo_hookean_2_grad(obj: ti.template()):# -> ti.types.vector(8, ti.f32):
-	# ret = ti.Matrix([[0.0 for _ in ti.static(range(dim ** 2))] for __ in range(dim ** 2)])
-	# print('Once!')
+def implicit_solver_neo_hookean(obj: ti.template()):
 	obj.matrix_A.fill(mat(0.0))
 	obj.vec_b.fill(vec(0.0))
 	obj.vec_x.fill(vec(0.0))
+
 	compute_linear_system_matrix_a(obj)
 	compute_linear_system_vector_b(obj)
-	# v = b
-	# v = jacobi_iter(A, b)
-	# print('before', obj.vec_x[0])
 	jacobi_iter_field(obj)
-	# print('after',obj.vec_x[0])
-	# print(v)
-	# print(b)
-	# x = b
-	# print(b)
-	# print(x)
-	# A.to_numpy()
-	# b = com
-	# for i in range(obj.element_cnt):
-	# 	# t = tensor[i]
-	# 	element = obj.elements[i]
-	# 	p_0 = obj.particles[element.vertex_indices.x].pos
-	# 	X = mat(0)
-	# 	for j in ti.static(range(dim)):
-	# 		if j + 1 <= dim:
-	# 			p_j = obj.particles.pos[element.vertex_indices[j + 1]]
-	# 			X[:, j] = p_j - p_0
-	#
-	# 	R_inv = element.ref
-	# 	F = X @ R_inv
-	# 	F_inv = ti.math.inverse(F)
-	# 	X_inv = ti.math.inverse(X)
-	# 	V = element.volume
-	# 	part1 = mu * kronecker_product(R_inv@R_inv.transpose(), ti.math.eye(dim))
-	# 	part2_ = tensor_transpose(kronecker_product(-X_inv.transpose(), X_inv), dim, dim)
-	# 	part2 = -mu * part2_
-	# 	part3 = s_lambda * (kronecker_product((R_inv @ X_inv @ R_inv).transpose(), X_inv.transpose()) + ti.log(F.determinant()) * part2_ )
-	#
-	# 	M = 1.0 / obj.mass * ti.math.eye(dim ** 2)
-	# 	df_dx = -(part1 + part2 + part3) * V
-	# 	df_dx = (delta_time ** 2) * M @ df_dx
-	# 	A0 = mat(0)
-	# 	# for i in ti.static(range(dim)):
-	# 	# 	for j in ti.static(range(dim)):
-	# 			# rows = element.vertex_indices[i+1]
-	# 			# cols = element.vertex_indices[j+1]
-	# 			# ret[element.vertex_indices[i+1]:element.vertex_indices[i+1]+dim, element.vertex_indices[j+1]:element.vertex_indices[j+1]+dim] += df_dx[i*dim:i*dim+dim, j*dim:j*dim+dim]
-	# 			# obj.matrix_A[None][element.vertex_indices[i+1]:element.vertex_indices[i+1]+dim, element.vertex_indices[j+1]:element.vertex_indices[j+1]+dim] += df_dx[i*dim:i*dim+dim, j*dim:j*dim+dim]
-	# 		# A = mat(0)
-	# 		# index = element.vertex_indices[i+1]
-	# 		# A = df_dx[i*dim:i*dim+dim, i*dim:i*dim+dim]
-	# 		# obj.particles.implicit_A[index] += A
-	# 		# A0 -= A
-	# 		# print(A)
-	# 	obj.particles.implicit_A[element.vertex_indices[0]] += A0
-	# 	# print(A0[0:dim, 0:dim], A0[dim:dim+dim, dim:dim+dim])
-	# 	# print('A00 {}'.format(A00))
-	# 	# # print()
-	# 	# print('\n')
-	#
-	# 	# force = mu * F @ R_inv.transpose() + (- mu * X_inv).transpose() + (s_lambda * ti.log(F.determinant()) * X_inv).transpose()
-	# 	force = (mu * F - mu * F_inv.transpose() + s_lambda / 2 * ti.log(
-	# 		(F.transpose() @ F).determinant()) * F_inv.transpose()) @ R_inv.transpose()
-	# 	force *= V
-	# 	# print(mu * F @ R_inv.transpose() + (- mu * X_inv).transpose())
-	#
-	# 	# A = ti.math.eye(dim**2) - (delta_time **2) * M @ df_dx
-	# 	# v = ti.types.vector(dim**2, ti.f32)(0)
-	# 	# f = ti.types.vector(dim**2, ti.f32)(0)
-	# 	f0 = vec(0.0)
-	# 	for i in ti.static(range(dim)):
-	# 		f = vec(force[:, i])
-	# 		f0 -= f
-	# 		index = element.vertex_indices[i+1]
-	# 		obj.particles.implicit_b[index] += f
-	# 	obj.particles.implicit_b[element.vertex_indices[0]] += f0
-		# 	v[i*dim:(i+1)*dim] = obj.particles.vel[element.vertex_indices[i+1]]
-		# 	f[i*dim:(i+1)*dim] = vec(force[:, i])
 
-		# b = v - delta_time * M@f
-		# if ti.math.isnan(b[0]):
-		# 	print('Error: x_inv{}'.format(X_inv))
-		# 	print('Error: F det {}'.format(F.determinant()))
-		# x = jacobi_iter(A, b)
-		# x = ti.math.inverse(A) @ b
-		# v0 = vec(0)
-		# # print(force)
-		# for i in ti.static(range(dim)):
-		# 	v_ = x[i*dim:i*dim+dim]
-		# 	# v0 -= (v_ - obj.particles.vel[element.vertex_indices[i+1]])# * obj.mass
-		# 	v0 -= v_ #- obj.particles.vel[element.vertex_indices[i+1]])# * obj.mass
-		# 	# print('index {}, origin {}, v_ {}'.format(element.vertex_indices[i + 1],
-		# 	# 										  obj.particles.vel_next[element.vertex_indices[i + 1]], v_))
-		# 	obj.particles.vel_next[element.vertex_indices[i+1]] = v_
-		# # 	print("index {}, v_ {}, new v {}".format(element.vertex_indices[i+1], v_, obj.particles.vel[element.vertex_indices[i+1]]))
-		# # print('\n')
-		# obj.particles.vel_next[element.vertex_indices[0]] = v0
-	# for i in range(obj.particle_cnt):
-	# 	for j in ti.static(range(dim)):
-	# 		obj.particles.vel[i][j] = v[i*dim+j]
 	for i in range(obj.particle_cnt):
 		obj.particles.vel[i] = obj.vec_x[i]
-	# return b
 
-@ti.kernel
-def update_vel(obj: ti.template(), v: ti.template()):
-	obj.particles.vel[0] = v[0:dim]
-	obj.particles.vel[1] = v[dim:2*dim]
-	obj.particles.vel[2] = v[2*dim:3*dim]
-	# for index in range(obj.particle_cnt):
-	# 	# A = ti.math.eye(dim) - obj.particles.implicit_A[index]
-	# 	# b = obj.particles.vel[index] - delta_time * obj.particles.implicit_b[index] / obj.mass
-	# 	# x = b
-	# 	# x = ti.math.inverse(A) @ b
-	# 	# x = jacobi_iter(A, b)
-	# 	obj.particles.vel[index] = x
-	# 	obj.particles.implicit_A[index] = mat(0.0)
-	# 	obj.particles.implicit_b[index] = vec(0.0)
-		# obj.particles.vel_next[index] = vec(0.0)
-
-# @ti.kernel
-# def solve():
-# 	for i in range(element_cnt):
-# 		jacobi_iter(i)
 
 @ti.func
 def jacobi_iter_field(obj: ti.template()):
@@ -294,16 +180,20 @@ def jacobi_iter_field(obj: ti.template()):
 
 	# Set init point
 	for i in range(obj.particle_cnt):
-		obj.vec_x[i] = obj.vec_b[i]
+		obj.vec_x[i] = 0.5 * obj.vec_b[i]
 
 	err = compute_error(obj)
+	p_err = err
 	threshold = 1e-5
-	max_iter = 2000
+	max_iter = 20000
 	print('jacobi error first {}'.format(err))
 	while err > threshold and iter_cnt < max_iter:
 		jacobi_iter_field_once(obj)
 		err = compute_error(obj)
 		iter_cnt += 1
+		# if err > p_err:
+		# 	break
+		p_err = err
 	print('jacobi field iter cnt: {}, loss {}'.format(iter_cnt, err))
 
 
@@ -335,71 +225,9 @@ def jacobi_iter_field_once(obj: ti.template()):
 				b[k] += a_ii * obj.vec_x[i][k]
 				obj.vec_x[i][k] = b[k] / a_ii
 
-@ti.func
-def jacobi_iter(A: ti.template(), b:ti.template()):
-	iter_cnt = 0
-	x = b
-	err = (A@x - b).norm()
-	threshold = 1e-5
-	max_iter = 20
-	# last_err = 0
-	# ti.loop_config(serialize=True)
-	print('normal error first {}'.format(err))
-	while err > threshold and iter_cnt < max_iter:
-		for i in ti.static(range(dim*4)):
-			if ti.abs(A[i, i]) < 1e-6:
-				# print('i {} is {}, index {}'.format(i, A[i, i], index))
-				print('aaaaaaaaaaaaaaaaaaaa')
-				x[i] = 0.0
-			else:
-				# continue
-				# print('bbbbbbbbbbbbbbbbbbbbbbbbb', A[i, i])
-				y = x[i]
-				x[i] = (b[i] - A[i,:]@x + A[i, i]*x[i]) / A[i, i]
-				if ti.math.isnan(x[i]):
-					# print('Fxxxk: ',b[i], A[i,:]@x, i, A[i, i]*y, A[i, i])
-					print(A[i, :])
-					print('\n')
-		# 		if index == 1:
-		# 			print('down, {}, {}, {}, {}'.format(i, (b[i] - A[i,:]@x + A[i, i]*x[i]), A[i, i], x[i]))
-		# if index == 1:
-		# 	print('x is {}'.format(x))
-		# last_err = err
-		err = (A@x - b).norm()
-		iter_cnt += 1
-		# if ti.abs(last_err - err) < threshold:
-		#     break
-		# if index == 1:
-		# print('iter cnt: {}, loss {}, x {}'.format(iter_cnt, err, x))
-		# print(b)
-		print('iter cnt: {}, loss {}'.format(iter_cnt, err))
-
-	# print('iter cnt: {}, loss {}, x {}'.format(iter_cnt, err, x))
-	print('iter cnt: {}, loss {}'.format(iter_cnt, err))
-	return x
-
-	# elements[index].x = x
-	# p0, p1, p2, p3 = element.vertex_indices
-	# # v1, v2, v3 = x[0:3], x[3:6], x[6:9]
-	# v1 = vec(x[0], x[3], x[6])
-	# v2 = vec(x[1], x[4], x[7])
-	# v3 = vec(x[2], x[5], x[8])
-	# # f1 = (v1 - particles.vel_f[p1]) * mass
-	# # f2 = (v2 - particles.vel_f[p2]) * mass
-	# # f3 = (v3 - particles.vel_f[p3]) * mass
-	# # f0 = -f1-f2-f3
-	# v0 = -v1-v2-v3
-	# particles.vel[p0] = v0
-	# particles.vel[p1] = v1
-	# particles.vel[p2] = v2
-	# particles.vel[p3] = v3
-	# print('loss {}, iter {}'.format(err, iter_cnt))
-
-
 @ti.kernel
 def advect_implicit(obj: ti.template()):
 	for index in range(obj.particle_cnt):
-		# particles[index].vel +=
 		obj.particles[index].vel_g += 9.8 * ti.Vector(g_dir) * delta_time
 		obj.particles[index].vel *= ti.exp(-delta_time * damping)
 		obj.particles[index].vel_g *= ti.exp(-delta_time * damping)
@@ -413,13 +241,15 @@ def advect_implicit(obj: ti.template()):
 
 			if obj.particles.pos[index][i] > 1 and v[i] > 0:
 				obj.particles.vel[index][i] = 0.0
-				obj.particles.vel_g[index][i] = 0.0
+				# obj.particles.vel_g[index][i] = 0.0
 				v[i] = 0.0
 
 		if (obj.particles[index].pos - ti.Vector(block_center)).norm() < block_radius and v.dot(
 				ti.Vector(block_center) - obj.particles[index].pos) > 0:
 			disp = obj.particles[index].pos - ti.Vector(block_center)
 			v -= v.dot(disp) * disp / disp.norm_sqr()
+			obj.particles.vel[index] -= obj.particles.vel[index].dot(disp) * disp / disp.norm_sqr()
+			obj.particles.vel_g[index] -= obj.particles.vel_g[index].dot(disp) * disp / disp.norm_sqr()
 
 		obj.particles.pos[index] += v * delta_time
 		# obj.particles.vel[index] = obj.particles[index].vel

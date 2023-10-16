@@ -2,19 +2,23 @@
 
 import taichi as ti
 import numpy as np
-from main import dim, vec, mat, matA, vecb, index
+from main import dim, vec, mat, index
 import trimesh as tm
 from trimesh.interfaces import gmsh
 import meshio as mio
+import utils
 
 Particle = ti.types.struct(
 	pos=vec,
 	vel=vec,
-	vel_f=vec,
+	vel_g=vec,
+	vel_next=vec,
 	acc=vec,
 	mass=ti.f32,
 	force=vec,
-	ref_pos=vec
+	ref_pos=vec,
+	implicit_A=mat,
+	implicit_b=vec
 )
 
 Mesh = ti.types.struct(
@@ -26,10 +30,8 @@ Mesh = ti.types.struct(
 
 Element = ti.types.struct(
 	vertex_indices=index,
-	ref=mat,
-	A=matA,
-	b=vecb,
-	x=vecb
+	volume=ti.f32,
+	ref=mat
 )
 
 side_length = 0.2  #
@@ -66,6 +68,12 @@ class Object:
 		self.particles_init()
 		self.mesh_init()
 		self.elements_init()
+
+		# solve linear system
+		self.matrix_A = ti.Matrix.field(n=dim, m=dim, shape=(self.particle_cnt, self.particle_cnt), dtype=ti.f32)
+		self.vec_b = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
+		self.vec_x = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
+
 		print('Vertex count: {}'.format(self.particle_cnt))
 		print('Mesh count: {}'.format(self.mesh_cnt))
 		print('Element count: {}'.format(self.element_cnt))
@@ -89,9 +97,17 @@ class Object:
 			faces = np.array(faces)
 			element_indices = faces
 			A = ((side_length / subdivisions) ** 2) / 2
-			mass = self.rho  * A
+			mass = self.rho * A
 			num_sides = 3
+			# self.center = ti.Vector([0.72, 0.32])
 			self.center = ti.Vector([0.72, 0.8])
+
+			# vertices = np.array([[0.0, 0.0],[0.0,0.2],[0.2,0.0]])
+			# faces = np.array([[0, 1, 2]])
+			# element_indices = faces
+			# A = (0.2 **2 )/ 2
+			# mass = self.rho * A
+
 		else:
 			obj = tm.load_mesh('./obj/cube2.stl')
 			obj.apply_scale(1)
@@ -137,7 +153,7 @@ class Object:
 				if j + 1 <= dim:
 					p_i = self.particles[self.ti_element[i][j + 1]].pos
 					r[:, j] = p_i - p_0
-
+			self.elements[i].volume = utils.compute_volume(r)
 			self.elements[i].ref = ti.math.inverse(r)
 
 	@ti.kernel

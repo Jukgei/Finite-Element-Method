@@ -7,16 +7,12 @@ from main import block_radius, block_center, vec
 def kinematic(obj: ti.template()):
 	for i in range(obj.particle_cnt):
 		kinematic_particle(i, delta_time, obj.particles)
-		# print('hhh')
 
 @ti.func
 def kinematic_particle(index: ti.int32, dt: ti.f32, particles:ti.template()):
-	pass
-	# print('dfsdf', index, dt, particles[index].vel)
 	if auto_diff:
 		particles[index].vel += (particles[index].acc + 9.8 * ti.Vector(g_dir) - particles.pos.grad[index] /
 								 particles[index].mass) * dt
-	# particles[index].vel += (particles[index].acc + 9.8 * ti.Vector(g_dir)) * dt
 	else:
 		particles[index].vel += (particles[index].acc + 9.8 * ti.Vector(g_dir) - particles[index].force / particles[
 			index].mass) * dt
