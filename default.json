@@ -1,0 +1,27 @@
+{
+  "dim": 2,
+  "delta_time": 5e-4,
+  "auto_diff": true,
+  "use_explicit_method": false,
+  "g_dir": [0, -1],
+  "objects": [
+    {
+      "id": 0,
+      "rho": 500,
+      "center": [0.72, 0.8],
+      "side_length": 0.2,
+      "subdivisions": 10,
+      "E": 4e4,
+      "nu": 0.2,
+      "damping": 14.5
+    }
+  ],
+  "blocks": [
+    {
+      "id": 0,
+      "block_center": [0.5, 0.5],
+      "block_radius": 0.33
+    }
+  ]
+
+}

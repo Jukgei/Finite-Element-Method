@@ -1,8 +1,8 @@
 # coding=utf-8
 
 import taichi as ti
-import utils
-from main import dim, mat, mu, s_lambda
+from constants import dim, mat
+
 
 @ti.kernel
 def compute_energy(obj: ti.template()):
@@ -18,14 +18,14 @@ def compute_energy(obj: ti.template()):
 		R_inv = element.ref
 		F = X @ R_inv
 
-		V = utils.compute_volume(X)
+		V = element.volume
 
 		# Neo-Hookean
 		F_i = F
 		log_J_i = ti.log(F_i.determinant())
-		phi_i = mu / 2 * ((F_i.transpose() @ F_i).trace() - dim)
-		phi_i -= mu * log_J_i
-		phi_i += s_lambda / 2 * log_J_i ** 2
+		phi_i = obj.mu / 2 * ((F_i.transpose() @ F_i).trace() - dim)
+		phi_i -= obj.mu * log_J_i
+		phi_i += obj.s_lambda / 2 * log_J_i ** 2
 		obj.phi[i] = phi_i * V
 		obj.U[None] += V * phi_i
 

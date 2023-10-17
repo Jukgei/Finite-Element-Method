@@ -2,7 +2,7 @@
 
 import taichi as ti
 import numpy as np
-from main import dim, vec, mat, index
+from constants import dim, vec, mat, index
 import trimesh as tm
 from trimesh.interfaces import gmsh
 import meshio as mio
@@ -34,15 +34,20 @@ Element = ti.types.struct(
 	ref=mat
 )
 
-side_length = 0.2  #
-subdivisions = 10  #
+# side_length = 0.2  #
+# subdivisions = 10  #
 
 @ti.data_oriented
 class Object:
 
-	def __init__(self):
-		self.rho = 500
-		vertices, faces, element_indices, mass, num_sides = self.load_obj()
+	def __init__(self, config):
+		self.rho = config.get("rho")
+		# Young's modulus and Poisson's ratio
+		E, nu = config.get('E'), config.get('nu')
+		self.mu, self.s_lambda = E / 2 / (1 + nu), E * nu / (1 + nu) / (1 - 2 * nu)
+		self.E, self.nu = E, nu
+		self.damping = config.get('damping')
+		vertices, faces, element_indices, mass, num_sides = self.load_obj(config)
 		self.mass = mass
 		self.particle_cnt = vertices.shape[0]
 		self.mesh_cnt = faces.shape[0]
@@ -79,8 +84,10 @@ class Object:
 		print('Element count: {}'.format(self.element_cnt))
 		print('Element mass: {}'.format(mass))
 
-	def load_obj(self):
+	def load_obj(self, config):
 		if dim == 2:
+			side_length = config.get('side_length')
+			subdivisions = config.get('subdivisions')
 			x = np.linspace(0, side_length, subdivisions + 1)  #
 			y = np.linspace(0, side_length, subdivisions + 1)  #
 			vertices = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)  #
@@ -115,7 +122,7 @@ class Object:
 			mesh4 = mio.read('./obj/cube2.msh')
 			vertices = mesh4.points
 
-			# 获取四面体的点的indices
+			# Get the indices of the points of the tetrahedron
 			tetra_indices = mesh4.cells[0].data
 			element_indices = tetra_indices
 
@@ -153,7 +160,7 @@ class Object:
 				if j + 1 <= dim:
 					p_i = self.particles[self.ti_element[i][j + 1]].pos
 					r[:, j] = p_i - p_0
-			self.elements[i].volume = utils.compute_volume(r)
+			self.elements[i].volume = self.compute_volume(r)
 			self.elements[i].ref = ti.math.inverse(r)
 
 	@ti.kernel
@@ -166,3 +173,22 @@ class Object:
 			self.indices[i * 3 + 0] = self.ti_faces[i][0]
 			self.indices[i * 3 + 1] = self.ti_faces[i][1]
 			self.indices[i * 3 + 2] = self.ti_faces[i][2]
+
+	@staticmethod
+	@ti.func
+	def compute_volume(x: mat) -> ti.f32:
+		m = ti.math.mat3(0)
+		V = 0.0
+		for i in ti.static(range(x.m)):
+			for j in ti.static(range(x.n)):
+				m[i, j] = x[i, j]
+
+		p0 = m[:, 0]
+		p1 = m[:, 1]
+		p2 = m[:, 2]
+
+		if dim == 2:
+			V = ti.abs(p0.cross(p1).norm()) / 2
+		else:
+			V = (1 / 6) * ti.abs(p0.dot(p1.cross(p2)))
+		return V

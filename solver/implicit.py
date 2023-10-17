@@ -1,11 +1,7 @@
 # coding=utf-8
 
-import utils
 import taichi as ti
-from main import delta_time, damping, s_lambda, mu, g_dir
-# from main import element_cnt, particle_cnt
-from main import dim, mat, vec
-from main import block_radius, block_center
+from constants import delta_time, dim, mat, vec, g_dir
 
 
 @ti.func
@@ -57,7 +53,7 @@ def compute_linear_system_vector_b(obj: ti.template()):
 		F_inv = ti.math.inverse(F)
 		V = element.volume
 
-		force = (mu * F - mu * F_inv.transpose() + s_lambda / 2 * ti.log((F.transpose() @ F).determinant()) * F_inv.transpose()) @ R_inv.transpose()
+		force = (obj.mu * F - obj.mu * F_inv.transpose() + obj.s_lambda / 2 * ti.log((F.transpose() @ F).determinant()) * F_inv.transpose()) @ R_inv.transpose()
 		force *= -V
 
 		# f = ti.types.vector(dim*obj.particle_cnt, ti.f32)(0.0)
@@ -111,7 +107,7 @@ def compute_linear_system_matrix_a(obj: ti.template()):
 					dF = ti.math.eye(dim)
 				dF = dF@R_inv
 				dF_T = dF.transpose()
-				dF_dxij = mu * dF + (mu - s_lambda * log_J) * F_inv_T @ dF_T @ F_inv_T + s_lambda * (F_inv @ dF).trace() * F_inv_T
+				dF_dxij = obj.mu * dF + (obj.mu - obj.s_lambda * log_J) * F_inv_T @ dF_T @ F_inv_T + obj.s_lambda * (F_inv @ dF).trace() * F_inv_T
 				dF_dxij = -V * dF_dxij @ R_inv.transpose()
 				dF_dxij = (delta_time ** 2) * (1.0 / obj.mass * ti.math.eye(dim))@dF_dxij
 				dF_dx00 += dF_dxij
@@ -226,11 +222,11 @@ def jacobi_iter_field_once(obj: ti.template()):
 				obj.vec_x[i][k] = b[k] / a_ii
 
 @ti.kernel
-def advect_implicit(obj: ti.template()):
+def advect_implicit(obj: ti.template(), circle_blocks: ti.template()):
 	for index in range(obj.particle_cnt):
 		obj.particles[index].vel_g += 9.8 * ti.Vector(g_dir) * delta_time
-		obj.particles[index].vel *= ti.exp(-delta_time * damping)
-		obj.particles[index].vel_g *= ti.exp(-delta_time * damping)
+		obj.particles[index].vel *= ti.exp(-delta_time * obj.damping)
+		obj.particles[index].vel_g *= ti.exp(-delta_time * obj.damping)
 		v = obj.particles[index].vel + obj.particles[index].vel_g
 
 		for i in ti.static(range(dim)):
@@ -243,13 +239,18 @@ def advect_implicit(obj: ti.template()):
 				obj.particles.vel[index][i] = 0.0
 				# obj.particles.vel_g[index][i] = 0.0
 				v[i] = 0.0
-
-		if (obj.particles[index].pos - ti.Vector(block_center)).norm() < block_radius and v.dot(
-				ti.Vector(block_center) - obj.particles[index].pos) > 0:
-			disp = obj.particles[index].pos - ti.Vector(block_center)
-			v -= v.dot(disp) * disp / disp.norm_sqr()
-			obj.particles.vel[index] -= obj.particles.vel[index].dot(disp) * disp / disp.norm_sqr()
-			obj.particles.vel_g[index] -= obj.particles.vel_g[index].dot(disp) * disp / disp.norm_sqr()
+		for i in range(circle_blocks.blocks_count):
+			block = circle_blocks.blocks[i]
+			if block.radius <= 0.0:
+				continue
+			center = block.center
+			radius = block.radius
+			if (obj.particles[index].pos - center).norm() < radius and v.dot(
+					center - obj.particles[index].pos) > 0:
+				disp = obj.particles[index].pos - center
+				v -= v.dot(disp) * disp / disp.norm_sqr()
+				obj.particles.vel[index] -= obj.particles.vel[index].dot(disp) * disp / disp.norm_sqr()
+				obj.particles.vel_g[index] -= obj.particles.vel_g[index].dot(disp) * disp / disp.norm_sqr()
 
 		obj.particles.pos[index] += v * delta_time
 		# obj.particles.vel[index] = obj.particles[index].vel

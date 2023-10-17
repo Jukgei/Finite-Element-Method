@@ -1,8 +1,8 @@
 # coding=utf-8
 
-import utils
 import taichi as ti
-from main import dim, mat, mu, s_lambda, vec
+from constants import dim, mat, vec
+
 
 @ti.kernel
 def neo_hookean_1_grad(obj: ti.template()):
@@ -22,14 +22,14 @@ def neo_hookean_1_grad(obj: ti.template()):
 		# force1 = mu * F @ R_inv.transpose() + (- mu * R_inv_F_inv).transpose() + (s_lambda * ti.log(F.determinant()) * R_inv_F_inv).transpose()
 		F_inv = ti.math.inverse(F)
 		log_J_i = ti.log(F.determinant())
-		force = (mu * F - mu * F_inv.transpose() + s_lambda * ti.log(F.determinant()) * F_inv.transpose()) @ R_inv.transpose()
+		force = (obj.mu * F - obj.mu * F_inv.transpose() + obj.s_lambda * ti.log(F.determinant()) * F_inv.transpose()) @ R_inv.transpose()
 		# force1 = (mu * F - mu * F_inv.transpose() + s_lambda/2 * ti.log((F.transpose()@F).determinant()) * F_inv.transpose()) @ R_inv.transpose()
 		# print(force1 - force)
 		force *= V
 
-		phi_i = mu / 2 * ((F.transpose() @ F).trace() - dim)
-		phi_i -= mu * log_J_i
-		phi_i += s_lambda / 2 * log_J_i ** 2
+		phi_i = obj.mu / 2 * ((F.transpose() @ F).trace() - dim)
+		phi_i -= obj.mu * log_J_i
+		phi_i += obj.s_lambda / 2 * log_J_i ** 2
 		# factor = 1 / math.factorial(dim)
 		# factor = 1 / 6
 		#
