@@ -19,7 +19,7 @@ if __name__ == '__main__':
 	config = utils.read_config(args.config)
 	utils.sys_init(config)
 
-	ti.init(ti.gpu, debug=False, device_memory_fraction=0.7, kernel_profiler=True)
+	ti.init(ti.gpu, debug=False, device_memory_fraction=0.9, kernel_profiler=True)
 
 	import constants
 	from render.render import Render
@@ -34,8 +34,9 @@ if __name__ == '__main__':
 	widget, camera = render.widget, render.camera
 
 	frame_cnt = 0
+	sim_count = config.get('sim_count')
 	soft_objects = []
-	circleBlocks = CircleBlocks(config.get('blocks'))
+	circle_blocks = CircleBlocks(config.get('blocks'))
 
 	for i in config.get('objects'):
 		soft_obj = Object(i)
@@ -43,6 +44,16 @@ if __name__ == '__main__':
 
 	run = True
 	now_frame = 0
+
+	# is_output_gif = config.get('is_output_gif')
+	is_output_ply = config.get('is_output_ply')
+	output_fps = config.get('output_fps', 60)
+	frame_time = 1.0 / output_fps
+	virtual_time = 0.0
+	dt = config.get("delta_time")
+	ply_cnt = 0
+	video_manager = ti.tools.VideoManager(output_dir="./output", framerate=output_fps, automatic_build=False)
+
 	while widget.running:
 		widget.get_event()
 		if widget.is_pressed('c'):
@@ -51,29 +62,53 @@ if __name__ == '__main__':
 			print('Camera up [{}]'.format(', '.join('{:.2f}'.format(x) for x in camera.curr_up)))
 		frame_cnt += 1
 		if widget.is_pressed('r') and frame_cnt - now_frame > 20:
-			print('Resume')
+			print('Resume.')
 			run = True
 			now_frame = frame_cnt
 		if widget.is_pressed('p'):
-			print('Pause')
+			print('Pause.')
 			run = False
+
+		# if widget.is_pressed('q'):
+		# 	print('Quit.')
+		# 	break
 
 		if run:
 			for soft_obj in soft_objects:
-				for i in range(10):
+				for i in range(sim_count):
 					if constants.auto_diff == 0:
 						fem(soft_obj)
 					else:
 						with ti.ad.Tape(loss=soft_obj.U):
 							compute_energy(soft_obj)
 					if constants.use_explicit_method or constants.auto_diff == 1:
-						ki.kinematic(soft_obj, circleBlocks)
+						ki.kinematic(soft_obj, circle_blocks)
 					else:
-						advect_implicit(soft_obj, circleBlocks)
+						advect_implicit(soft_obj, circle_blocks)
+				virtual_time += sim_count * dt
 				# ti.profiler.print_kernel_profiler_info()
 				# ti.profiler.clear_kernel_profiler_info()
 
-		if constants.dim == 2:
-			render.render2d(soft_objects, circleBlocks)
-		else:
-			render.render3d(soft_objects)
+		if is_output_ply and (virtual_time / frame_time) > ply_cnt and constants.dim == 3:
+			# np_pos = np.reshape(ps.fluid_particles.pos.to_numpy(), (ps.particle_num, 3))
+			# writer = ti.tools.PLYWriter(num_vertices=ps.particle_num)
+			# writer.add_vertex_pos(np_pos[:, 0], np_pos[:, 1], np_pos[:, 2])
+			# writer.add_vertex_rgba(
+			# 	np_rgba[:, 0], np_rgba[:, 1], np_rgba[:, 2], np_rgba[:, 3])
+			# writer.export_frame_ascii(ply_cnt, series_prefix)
+			# if ps.exist_rigid[None] == 1:
+			# 	ps.update_mesh_vextics()
+
+			for soft_obj in soft_objects:
+				soft_obj.update_obj()
+				soft_obj.save_obj(f"output/obj_{ply_cnt:06}.obj")
+			# 	with open(f"output/obj_{ply_cnt:06}.obj", "w") as f:
+			# 		e = ps.mesh.export(file_type='obj')
+			# 		f.write(e)
+			ply_cnt += 1
+
+		render.render(soft_objects, circle_blocks, virtual_time)
+
+	if render.is_output_gif:
+		render.video_manager.make_video(gif=True, mp4=True)
+		# ffmpeg -i %6d.png -r 60 output.mp4

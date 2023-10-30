@@ -1,2 +1,5 @@
 .idea
 imgui.ini
+output
+*.mtl
+*.png

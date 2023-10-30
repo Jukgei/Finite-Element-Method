@@ -2,7 +2,7 @@
 
 import taichi as ti
 import constants
-
+import numpy as np
 
 class Render:
 
@@ -12,8 +12,14 @@ class Render:
 		self.height = 640
 		self.box_vert = None
 		self.box_lines_indices = None
+		self.is_output_gif = config.get('is_output_gif')
+		self.output_fps = config.get('output_fps', 60)
+		self.output_frame_cnt = 0
+		self.frame_time = 1.0 / self.output_fps
+		# virtual_time = 0.0
 		self.widget, self.camera = self.render_init(config)
-
+		if self.is_output_gif:
+			self.video_manager = ti.tools.VideoManager(output_dir="./output", framerate=self.output_fps, automatic_build=False)
 
 	def render_init(self, config):
 		if constants.dim == 2:
@@ -55,7 +61,7 @@ class Render:
 
 		return widget, camera
 
-	def render2d(self, objects, circle_blocks):
+	def render2d(self, objects, circle_blocks, virtual_time):
 		base_ = 0.13
 		for obj in objects:
 			pos_ = obj.particles.pos.to_numpy()
@@ -67,9 +73,19 @@ class Render:
 		for index in range(circle_blocks.blocks_count):
 			block = circle_blocks.blocks[index]
 			self.widget.circle(block.center, color=0x343434, radius=block.radius * self.width)
-		self.widget.show()
 
-	def render3d(self, objects):
+		# if self.is_output_gif and (virtual_time / self.frame_time) > self.output_frame_cnt:
+			# img = ti.ui.get_image_buffer_as_numpy()
+			# self.video_manager.write_frame(img)
+			# self.output_frame_cnt += 1
+		if self.is_output_gif and (virtual_time / self.frame_time) > self.output_frame_cnt:
+
+			self.widget.show(f'./output/frames/{self.output_frame_cnt:06d}.png')
+			self.output_frame_cnt += 1
+		else:
+			self.widget.show()
+
+	def render3d(self, objects, virtual_time):
 		canvas = self.widget.get_canvas()
 		scene = ti.ui.Scene()
 
@@ -82,8 +98,23 @@ class Render:
 		# pos_ = obj.particles.pos.to_numpy()
 
 		for obj in objects:
-			scene.particles(obj.particles.pos, color=(1.0, 1.0, 1), radius=.0001)
-			scene.mesh(obj.particles.pos, obj.indices, show_wireframe=False)
+			scene.particles(obj.particles.pos, color=(1.0, 0.0, 0), radius=.001, index_offset=1509, index_count=1)
+			# scene.particles(obj.particles.pos, color=(1.0, 1.0, 1), radius=.01)
+			scene.mesh(obj.particles.pos, obj.indices, show_wireframe=True)
+			# scene.mesh(np.ndarray(obj.tet.grid.points[obj.surface_vertex]), obj.indices, show_wireframe=True)
 
 		canvas.scene(scene)
+
+		if self.is_output_gif and (virtual_time / self.frame_time) > self.output_frame_cnt:
+			img = self.widget.get_image_buffer_as_numpy()
+			self.video_manager.write_frame(img)
+			self.output_frame_cnt += 1
+
 		self.widget.show()
+
+	def render(self, soft_objects, circle_blcoks, virtual_time):
+
+		if constants.dim == 2:
+			self.render2d(soft_objects, circle_blcoks, virtual_time)
+		else:
+			self.render3d(soft_objects, virtual_time)
