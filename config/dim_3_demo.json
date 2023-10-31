@@ -1,20 +1,20 @@
 {
   "dim": 3,
   "delta_time": 2e-4,
-  "sim_count": 10,
+  "sim_count": 1,
   "auto_diff": false,
-  "use_explicit_method": true,
+  "use_explicit_method": false,
   "g_dir": [0, -1, 0],
   "is_output_gif": false,
-  "is_output_ply": true,
+  "is_output_ply": false,
   "output_fps": 60,
   "objects": [
     {
       "id": 0,
       "rho": 1000,
       "center": [2, 1, 2],
-      "obj": "./obj/spot20.obj",
-      "E": 4e4,
+      "obj": "./obj/spot.obj",
+      "E": 4e5,
       "nu": 0.2,
       "damping": 5
     }

@@ -6,9 +6,6 @@ import taichi as ti
 import numpy as np
 from constants import dim, vec, mat, index
 import trimesh as tm
-from trimesh.interfaces import gmsh
-import meshio as mio
-import utils
 
 Particle = ti.types.struct(
 	pos=vec,
@@ -78,9 +75,9 @@ class Object:
 		self.elements_init()
 
 		# solve linear system
-		# self.matrix_A = ti.Matrix.field(n=dim, m=dim, shape=(self.particle_cnt, self.particle_cnt), dtype=ti.f32)
-		# self.vec_b = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
-		# self.vec_x = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
+		self.matrix_A = ti.Matrix.field(n=dim, m=dim, shape=(self.particle_cnt, self.particle_cnt), dtype=ti.f32)
+		self.vec_b = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
+		self.vec_x = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
 
 		print('Vertex count: {}'.format(self.particle_cnt))
 		print('Mesh count: {}'.format(self.mesh_cnt))
@@ -120,90 +117,33 @@ class Object:
 
 		else:
 			obj_path = config.get('obj')
-			file_type = obj_path.split('.')[-1]
-			mesh4 = None
-			if file_type == 'stl' or file_type == 'obj':
-				msh_file_path = '.'.join((obj_path.split('.')[:-1])) + '.msh'
-				if os.path.exists(msh_file_path):
-					mesh4 = mio.read(msh_file_path)
-					print('The tetrahedron already exists.')
-				else:
-					obj = tm.load_mesh(obj_path)
-					obj.apply_scale(1.0)
-					# method 7 :MMG3D is nice
-					msh = gmsh.to_volume(obj, msh_file_path, 20, mesher_id=7)
-					mesh4 = mio.read(msh_file_path)
-					print('Use to_volume method create tetrahedron from "stl" model.')
-			elif file_type == 'msh':
-				print('Access "msh" model directly.')
-				mesh4 = mio.read(obj_path)
-
-
-			else:
-				mesh4 = mio.read(obj_path)
-			# obj = tm.load_mesh("./obj/spot_triangulated.obj")
-			obj = tm.load_mesh("./obj/spot20.obj")
+			obj = tm.load_mesh(obj_path)
 			self.obj = obj
 
 			import pyvista as pv
 			import tetgen
 
-			# sphere = pv.Sphere()
-			# spot = pv.read('./obj/spot_triangulated.obj')
-			sphere = pv.Sphere()
-			spot = pv.read('./obj/spot20.obj')
-			self.duplicate_index_2_obj_index = self.process_obj_duplicate_point('./obj/spot20.obj')
-			# spot = pv.read('./obj/cube.stl')
-			self.tet = tetgen.TetGen(spot)
+			obj_pv_format = pv.read(obj_path)
+			tet = tetgen.TetGen(obj_pv_format)
 			'''
 			mindihedral:
 			minratio:
 			'''
-			self.tet.tetrahedralize(order=1, mindihedral=10, minratio=5.0)
+			tet.tetrahedralize(order=1, mindihedral=10, minratio=5.0)
 
-			self.mesh4 = mesh4
-			# vertices = mesh4.points
-			# tet.grid.extract_cells()
+			vertices = tet.node
+			element_indices = tet.elem
 
-			cells = self.tet.grid.cells.reshape(-1, 5)[:, 1:]
-			cell_center = self.tet.grid.points[cells].mean(1)
-
-			# extract cells below the 0 xy plane
-			mask = cell_center[:, 2] < 0
-			cell_ind = mask.nonzero()[0]
-
-			vertices = self.tet.node
-
-			# Get the indices of the points of the tetrahedron
-			# tetra_indices = mesh4.cells[0].data
-			# element_indices = tetra_indices
-			element_indices = self.tet.elem
-
-			faces = []
-			# # for tetra in tetra_indices:
-			for tetra in self.tet.elem:
-				x, y, z, w = tetra
-				faces.append([x, y, z])
-				faces.append([x, y, w])
-				faces.append([x, z, w])
-				faces.append([y, z, w])
-			faces = np.array(faces)
-			self.surface, self.surface_vertex = self.extract_surface(faces, vertices)
+			self.surface, self.surface_vertex = self.extract_surface(tet)
 			faces = self.surface
-			self.uv = self.recover_uv(obj, self.surface, vertices)
 
-
+			# self.uv = self.recover_uv(obj, self.surface, vertices)
 
 			self.remap_surface = np.copy(self.surface)
 			self.remap_surface_index(self.remap_surface, self.surface_vertex)
-			self.map_index = self.link_obj_vertex(obj, self.surface, vertices)
-			# self.uv = self.recover_uv_from_disk()
-			# self.texture = tm.visual.texture.TextureVisuals(uv=self.uv)
-			# faces = tet.f
-			# faces = tetra_indices # Volume
-			# vertices = mesh.vertices
-			# mass = self.rho / tetra_indices.shape[0]
-			mass = self.rho / self.tet.elem.shape[0]
+			mesh = tm.Trimesh(vertices=tet.grid.points[self.surface_vertex], faces=self.remap_surface)
+			self.map_index = self.link_mesh_vertex(obj, mesh)
+			mass = self.rho / tet.elem.shape[0]
 			num_sides = 4
 			self.center = ti.Vector(config.get('center'))
 		return vertices, faces, element_indices, mass, num_sides
@@ -240,38 +180,15 @@ class Object:
 					for i in v:
 						ret[i] = v
 
-		print('HHH')
 		return ret
 
-	@staticmethod
-	def recover_uv_from_disk():
-		import pickle
-		with open('list_data.pkl', 'rb') as file:
-			loaded_list = pickle.load(file)
-			return loaded_list
-
-	def link_obj_vertex(self, ori_obj, surface, vertices):
-		mesh = tm.Trimesh(vertices=self.tet.grid.points[self.surface_vertex], faces=self.remap_surface)
+	def link_mesh_vertex(self, mesh1, mesh2):
 		map_index = []
-		error_list = []
-		for pos in ori_obj.vertices:
-			v_d, v_index = mesh.nearest.vertex(pos)
-			error_list.append(v_d)
-			map_index.append(v_index)
-		# vertex_set = set()
-		# for tri in surface:
-		# 	v0, v1, v2 = tri
-		# 	vertex_set.add(v0)
-		# 	vertex_set.add(v1)
-		# 	vertex_set.add(v2)
-		# map_index = []
 		# error_list = []
-		# for indice in vertex_set:
-		# 	pos = vertices[indice]
-		# 	v_d, v_index = ori_obj.nearest.vertex(pos)
-		# 	error_list.append(v_d)
-		# 	if abs(v_d) < 1e-7:
-		# 		map_index.append(v_index)
+		for pos in mesh1.vertices:
+			v_d, v_index = mesh2.nearest.vertex(pos)
+			# error_list.append(v_d)
+			map_index.append(v_index)
 		return map_index
 
 	def recover_uv(self, ori_obj, surface, vertices):
@@ -303,74 +220,7 @@ class Object:
 				p0, p1, p2 = ori_obj.vertices[ori_obj.faces[tri_index[0]]]
 				alpha, beta, gamma = self.barycentric_coordinates(p0, p1, p2, p_in_tri)
 				ori_uv0, ori_uv1, ori_uv2 = ori_obj.visual.uv[ori_obj.faces[tri_index[0]]]
-				# if alpha < 1e-7:
-				# 	test = np.array([2402, 2410])
-				# 	result = np.any(np.isin(ori_obj.faces, test), axis=1)
-				# 	matching_indices = np.where(result)
-				# 	kk = ori_obj.faces[matching_indices]
-				# 	print('yjk')
-				# if alpha < 1e-7 or beta < 1e-7 or gamma < 1e-7:
-				# 	index_ = [alpha, beta, gamma].index(min([alpha, beta, gamma]))
-				# 	uv.append([0, 0])
-				# else:
 				uv.append(alpha * ori_uv0 + beta * ori_uv1 + gamma * ori_uv2)
-				# uv.append(alpha * ori_uv0 + beta * ori_uv1 + gamma * ori_uv2)
-				# uv.append([0.0, 0.0])
-
-			# if d[0] > max_d:
-			# 	max_d = d[0]
-			# 	max_index = indice
-
-		# min_d_list = []
-		# for indice in vertex_set:
-		# 	min_d = np.inf
-		# 	# min_f_indice = 0
-		# 	# indice = 1509
-		# 	pos = vertices[indice]
-		# 	min_judge = np.inf
-		# 	uv_point = 0
-		# 	for index in range(ori_obj.face_normals.shape[0]):
-		# 		normal = ori_obj.face_normals[index]
-		# 		D = - np.dot(normal, ori_obj.vertices[ori_obj.faces[index][0]])
-		# 		d = np.dot(pos, normal) + D
-		# # 		d2 = d**2
-		# 		p_in_plane = pos - normal * d
-		# 		p0, p1, p2 = ori_obj.vertices[ori_obj.faces[index]]
-		# 		# a = np.dot(np.cross(p1-p0, p_in_plane-p0), normal)
-		# 		# b = np.dot(np.cross(p2-p1, p_in_plane-p1), normal)
-		# 		# c = np.dot(np.cross(p0-p2, p_in_plane-p2), normal)
-		# 		aa, bb, cc = self.barycentric_coordinates(p0, p1, p2, p_in_plane)
-		# 		judge_value = ((aa + bb + cc) - 1) ** 2
-		# 		min_judge = min(judge_value, min_judge)
-		# 		is_inside1 = True if ((aa + bb + cc) - 1) ** 2 < 1e-7 else False
-		# 		# is_inside = True if a > 0 and b > 0 and c > 0 else False
-		#
-		# 		if is_inside1 and abs(d) < min_d:
-		# 			# print(d)
-		# 			min_d = abs(d)
-		# 			ori_uv0, ori_uv1, ori_uv2 = ori_obj.visual.uv[ori_obj.faces[index]]
-		# 			uv_point = aa * ori_uv0 + bb * ori_uv1 + cc * ori_uv2
-		# 	# if type(uv_point) == type(0):
-		# 	# 	print('FXXXXX')
-		# 	uv.append(uv_point)
-		# 	min_d_list.append(min_d)
-		# 	print('Recover uv  process {}%'.format(indice/ len(vertex_set) * 100))
-
-
-		# 		if d2 < min_d and is_inside and is_inside1:
-		# 			min_d = d2
-		# 			min_f_indice = index
-		#
-		# 	# ori_v0, ori_v1, ori_v2 = ori_obj.faces[min_f_indice]
-		# 	p0, p1, p2 = ori_obj.vertices[ori_obj.faces[min_f_indice]]
-		# 	a, b, c = self.barycentric_coordinates(p0, p1, p2, pos)
-		# 	ori_uv0, ori_uv1, ori_uv2 = ori_obj.visual.uv[ori_obj.faces[min_f_indice]]
-		# 	uv = a * ori_uv0 + b * ori_uv1 + c* ori_uv2
-		# 	print(min_d, min_f_indice)
-		# pass
-		print('Recover uv consume time: {}'.format(time.time() - start_time))
-		print('hh')
-		print('total max is: {}'.format(total_max))
 		return uv
 
 	@staticmethod
@@ -390,35 +240,46 @@ class Object:
 		return lambda1, lambda2, lambda3
 
 
-	def extract_surface(self, f, vertices):
-		faces_dict= {}
-
-		for tetra in self.tet.elem:
+	@staticmethod
+	def extract_surface(tet):
+		faces = []
+		faces_dict = {}
+		# # for tetra in tetra_indices:
+		for tetra in tet.elem:
 			x, y, z, w = tetra
-			# faces_dict
+			faces.append([x, y, z])
+			faces.append([x, y, w])
+			faces.append([x, z, w])
+			faces.append([y, z, w])
+
 			faces_dict[tuple(sorted([x, y, z]))] = tetra
 			faces_dict[tuple(sorted([x, y, w]))] = tetra
 			faces_dict[tuple(sorted([x, z, w]))] = tetra
 			faces_dict[tuple(sorted([y, z, w]))] = tetra
 
+		faces = np.array(faces)
+
 		d = {}
 		surface = []
-		for tri in f:
+		for tri in faces:
 			key = tuple(sorted(tri))
 			if key in d:
 				d[key] += 1
 			else:
 				d[key] = 1
 
+		vertices = tet.node
+
+		# Re-construct the surface in counterclockwise order
 		for k, v in d.items():
 			if v == 1:
 				tetra = faces_dict[k]
-				inner_point_indice = self.difference(tetra, k)[0]
+				inner_point_indice = Object.difference(tetra, k)[0]
 				inner_point = vertices[inner_point_indice]
 				f0, f1, f2 = k
 				p0, p1, p2 = vertices[f0], vertices[f1], vertices[f2]
 
-				if np.cross(p1-p0, p2-p0).dot(inner_point - p0) < 0:
+				if np.cross(p1 - p0, p2 - p0).dot(inner_point - p0) < 0:
 					surface.append([f0, f1, f2])
 				else:
 					surface.append([f0, f2, f1])
@@ -448,56 +309,18 @@ class Object:
 
 	def update_obj(self):
 		points = self.particles.pos.to_numpy()
-		# self.tet.grid.points = points
-		test_set = set()
 		for i in range(len(self.map_index)):
 			# obj_index_list = self.duplicate_index_2_obj_index[self.map_index[i]]
 			# for index in obj_index_list:
 			self.obj.vertices[i] = points[self.map_index[i]]
 				# test_set.add(index)
-		print('hhh')
 		# self.tmmesh.vertices = self.particles.pos.to_numpy()
 
 	def save_obj(self, file_name):
-		# texture = tm.visual.texture.TextureVisuals(uv=self.uv)
-		# mesh = tm.Trimesh(vertices=self.tet.grid.points[self.surface_vertex], faces=self.remap_surface, visual=texture)
-		# mesh.visual.uv = self.uv
 		with open(file_name, 'w') as f:
 			# e = mesh.export(file_type='obj')
 			e = self.obj.export(file_type='obj')
 			f.write(e)
-		# self.tet.grid.save(file_name, False)
-		# self.tmmesh.vertices
-		# with open(file_name, "w") as f:
-		# 	e = self.tmmesh.export(file_type='obj')
-		# 	f.write(e)
-		# mio
-		# points = self.mesh4.points
-		# # # tet_cells = self.mesh4.cells['tetra']
-		# tet_cells = None
-		# for cell_block in self.mesh4.cells:
-		# 	if cell_block.type == 'tetra':
-		# 		tet_cells = cell_block.data
-		# 		break
-		#
-		# if tet_cells is None:
-		# 	print("No tetrahedral cells found in the MSH file.")
-		#
-		# tri_cells = []
-		# for tet in tet_cells:
-		# 	tri_cells.append([tet[0], tet[1], tet[2]])
-		# 	tri_cells.append([tet[0], tet[1], tet[3]])
-		# 	tri_cells.append([tet[1], tet[2], tet[3]])
-		# 	tri_cells.append([tet[0], tet[2], tet[3]])
-
-		# # tet_cells = None
-		# # for cell_block in self.mesh4.cells:
-		# # 	if cell_block.type == 'tetra':
-		# # 		tet_cells = cell_block.data
-		# # 		break
-		# cells = [("tetra", tet_cells)]
-		# obj_mesh = mio.Mesh(points=points, cells=[('triangle', tri_cells)])
-		# mio.write(file_name, obj_mesh, file_format='obj')
 
 	@ti.kernel
 	def particles_init(self):

@@ -187,8 +187,8 @@ def jacobi_iter_field(obj: ti.template()):
 		jacobi_iter_field_once(obj)
 		err = compute_error(obj)
 		iter_cnt += 1
-		# if err > p_err:
-		# 	break
+		if err >= p_err:
+			break
 		p_err = err
 	print('jacobi field iter cnt: {}, loss {}'.format(iter_cnt, err))
 
