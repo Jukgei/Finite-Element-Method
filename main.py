@@ -19,7 +19,7 @@ if __name__ == '__main__':
 	config = utils.read_config(args.config)
 	utils.sys_init(config)
 
-	ti.init(ti.gpu, debug=False, device_memory_fraction=0.9, kernel_profiler=True)
+	ti.init(ti.gpu, debug=False, device_memory_fraction=0.65, kernel_profiler=True)
 
 	import constants
 	from render.render import Render
@@ -107,7 +107,11 @@ if __name__ == '__main__':
 			# 		f.write(e)
 			ply_cnt += 1
 
-		render.render(soft_objects, circle_blocks, virtual_time)
+		msgs = []
+		msgs.append("frame_cnt: {}".format(frame_cnt))
+		msgs.append("time: {:.4f}".format(virtual_time))
+
+		render.render(soft_objects, circle_blocks, virtual_time, msgs)
 
 	if render.is_output_gif:
 		render.video_manager.make_video(gif=True, mp4=True)

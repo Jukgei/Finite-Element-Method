@@ -85,7 +85,7 @@ class Render:
 		else:
 			self.widget.show()
 
-	def render3d(self, objects, virtual_time):
+	def render3d(self, objects, virtual_time, msgs):
 		canvas = self.widget.get_canvas()
 		scene = ti.ui.Scene()
 
@@ -102,7 +102,6 @@ class Render:
 			# scene.particles(obj.particles.pos, color=(1.0, 1.0, 1), radius=.01)
 			scene.mesh(obj.particles.pos, obj.indices, show_wireframe=True)
 			# scene.mesh(np.ndarray(obj.tet.grid.points[obj.surface_vertex]), obj.indices, show_wireframe=True)
-
 		canvas.scene(scene)
 
 		if self.is_output_gif and (virtual_time / self.frame_time) > self.output_frame_cnt:
@@ -112,9 +111,14 @@ class Render:
 
 		self.widget.show()
 
-	def render(self, soft_objects, circle_blcoks, virtual_time):
+		gui = self.widget.get_gui()
+
+		for msg in msgs:
+			gui.text(msg)
+
+	def render(self, soft_objects, circle_blcoks, virtual_time, msgs):
 
 		if constants.dim == 2:
 			self.render2d(soft_objects, circle_blcoks, virtual_time)
 		else:
-			self.render3d(soft_objects, virtual_time)
+			self.render3d(soft_objects, virtual_time, msgs)

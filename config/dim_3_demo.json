@@ -1,7 +1,7 @@
 {
   "dim": 3,
-  "delta_time": 2e-4,
-  "sim_count": 1,
+  "delta_time": 1e-4,
+  "sim_count": 10,
   "auto_diff": false,
   "use_explicit_method": false,
   "g_dir": [0, -1, 0],
