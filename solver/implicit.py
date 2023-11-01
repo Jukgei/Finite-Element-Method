@@ -12,23 +12,25 @@ def kronecker_product(a: ti.template(), b: ti.template()):
 			ret[i*b.n:i*b.n+b.n, j*b.m:j*b.m+b.m] = a[i, j] * b
 	return ret
 
+
 @ti.func
-def tensor_transpose(a: ti.template(), rows: ti.template(), cols: ti.template()):
-	ret = ti.types.matrix(a.n, a.m, ti.f32)(0)
-	# for i in ti.static(range(rows)):
-	# 	for j in ti.static(range(cols)):
-	# 		ret[i*rows:i*rows+rows, j*cols:j*cols+cols] = a[j*cols:j*cols+cols, i*rows:i*rows+rows]
-	ret[0, :] = a[0, :]
-	ret[1, :] = a[2, :]
-	ret[2, :] = a[1, :]
-	ret[3, :] = a[3, :]
-
-	# ret[:, 0] = a[:, 0]
-	# ret[:, 1] = a[:, 2]
-	# ret[:, 2] = a[:, 1]
-	# ret[:, 3] = a[:, 3]
-
+def check_diagonally_dominant(obj: ti.template()):
+	ret = 1
+	for i in range(obj.particle_cnt):
+		for l in ti.static(range(dim)):
+			diag_element = 0.0
+			other_element = 0.0
+			for j in range(obj.particle_cnt):
+				for k in ti.static(range(dim)):
+						mat = obj.matrix_A[i, j]
+						if i == j and k == l:
+							diag_element += ti.abs(mat[l, k])
+						else:
+							other_element += ti.abs(mat[l, k])
+			if diag_element < other_element:
+				ret = 0
 	return ret
+
 
 @ti.func
 def compute_linear_system_vector_b(obj: ti.template()):
@@ -59,16 +61,18 @@ def compute_linear_system_vector_b(obj: ti.template()):
 		# f = ti.types.vector(dim*obj.particle_cnt, ti.f32)(0.0)
 
 		f0 = vec(0.0)
-		m_ = 1.0 / obj.mass
+		# m_ = 1.0 / obj.mass
 		for i in ti.static(range(dim)):
 			f_n = vec(force[:, i])
 			f0 -= f_n
 			particle_index = element.vertex_indices[i+1]
+			m_ = 1.0 / obj.particles.mass[particle_index]
 			obj.vec_b[particle_index] += delta_time * m_ * f_n
 			# for j in ti.static(range(dim)):
 			# 	f[particle_index*dim+j] = f_n[j]
 
 		particle_index = element.vertex_indices.x
+		m_ = 1.0 / obj.particles.mass[particle_index]
 		obj.vec_b[particle_index] += delta_time * m_ * f0
 		# for i in ti.static(range(dim)):
 		# 	f[particle_index*dim+i] = f0[i]
@@ -102,6 +106,9 @@ def compute_linear_system_matrix_a(obj: ti.template()):
 		for i in ti.static(range(dim)):
 			dF_dxi0 = ti.types.matrix(dim, dim, ti.f32)(0.0)
 			for j in ti.static(range(dim)):
+				rows = element.vertex_indices[i + 1]
+				cols = element.vertex_indices[j + 1]
+				# mass = obj.particles.mass[cols]
 				dF = mat(0.0)
 				if i == j:
 					dF = ti.math.eye(dim)
@@ -109,10 +116,9 @@ def compute_linear_system_matrix_a(obj: ti.template()):
 				dF_T = dF.transpose()
 				dF_dxij = obj.mu * dF + (obj.mu - obj.s_lambda * log_J) * F_inv_T @ dF_T @ F_inv_T + obj.s_lambda * (F_inv @ dF).trace() * F_inv_T
 				dF_dxij = -V * dF_dxij @ R_inv.transpose()
-				dF_dxij = (delta_time ** 2) * (1.0 / obj.mass * ti.math.eye(dim))@dF_dxij
+				# dF_dxij = (delta_time ** 2) * (1.0 / obj.mass) * dF_dxij
 				dF_dx00 += dF_dxij
-				rows = element.vertex_indices[i+1]
-				cols = element.vertex_indices[j+1]
+
 				obj.matrix_A[rows, cols] += dF_dxij
 				# for k in ti.static(range(dim)):
 				# 	for l in ti.static(range(dim)):
@@ -144,6 +150,12 @@ def compute_linear_system_matrix_a(obj: ti.template()):
 			# for k in ti.static(range(dim)):
 			# 	for l in ti.static(range(dim)):
 			# 		ret[r*dim+k, c*dim+l] += temp[k, l+i*dim]
+
+	for i in range(obj.particle_cnt):
+		for j in range(obj.particle_cnt):
+			# m_ = obj.mass
+			m_ = obj.particles.mass[i]
+			obj.matrix_A[i, j] = (delta_time ** 2) * ((1.0 / m_) * ti.math.eye(dim))@obj.matrix_A[i, j]
 
 	for i in range(obj.particle_cnt):
 		for j in range(obj.particle_cnt):
@@ -182,16 +194,35 @@ def jacobi_iter_field(obj: ti.template()):
 	p_err = err
 	threshold = 1e-5
 	max_iter = 20000
+	# convergent = check_diagonally_dominant(obj)
+	# if convergent == 1:
+	# 	print('convergent!')
+	# else:
+	# 	print('divergent!')
 	print('jacobi error first {}'.format(err))
-	while err > threshold and iter_cnt < max_iter:
+	while err > threshold and iter_cnt < max_iter:# and convergent == 1:
+
 		jacobi_iter_field_once(obj)
 		err = compute_error(obj)
 		iter_cnt += 1
 		if err >= p_err:
+			recover_past_frame_x(obj)
 			break
 		p_err = err
+		cache_x(obj)
 	print('jacobi field iter cnt: {}, loss {}'.format(iter_cnt, err))
 
+
+@ti.func
+def cache_x(obj: ti.template()):
+	for i in range(obj.particle_cnt):
+		obj.past_vec_x[i] = obj.vec_x[i]
+
+
+@ti.func
+def recover_past_frame_x(obj: ti.template()):
+	for i in range(obj.particle_cnt):
+		obj.vec_x[i] = obj.past_vec_x[i]
 
 @ti.func
 def compute_error(obj: ti.template()):

@@ -113,6 +113,6 @@ if __name__ == '__main__':
 
 		render.render(soft_objects, circle_blocks, virtual_time, msgs)
 
-	if render.is_output_gif:
-		render.video_manager.make_video(gif=True, mp4=True)
+	# if render.is_output_gif:
+	# 	render.video_manager.make_video(gif=True, mp4=True)
 		# ffmpeg -i %6d.png -r 60 output.mp4

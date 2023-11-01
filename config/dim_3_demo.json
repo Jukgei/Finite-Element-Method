@@ -1,6 +1,6 @@
 {
   "dim": 3,
-  "delta_time": 1e-4,
+  "delta_time": 5e-2,
   "sim_count": 10,
   "auto_diff": false,
   "use_explicit_method": false,
@@ -12,9 +12,9 @@
     {
       "id": 0,
       "rho": 1000,
-      "center": [2, 1, 2],
-      "obj": "./obj/spot.obj",
-      "E": 4e5,
+      "center": [2, 2, 2],
+      "obj": "./obj/cube.stl",
+      "E": 2e3,
       "nu": 0.2,
       "damping": 5
     }

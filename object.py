@@ -6,6 +6,8 @@ import taichi as ti
 import numpy as np
 from constants import dim, vec, mat, index
 import trimesh as tm
+import pyvista as pv
+import tetgen
 
 Particle = ti.types.struct(
 	pos=vec,
@@ -47,8 +49,8 @@ class Object:
 		self.E, self.nu = E, nu
 		self.damping = config.get('damping')
 		self.mesh4 = None
-		vertices, faces, element_indices, mass, num_sides = self.load_obj(config)
-		self.mass = mass
+		vertices, faces, element_indices, num_sides = self.load_obj(config)
+		# self.mass = mass
 		self.particle_cnt = vertices.shape[0]
 		self.mesh_cnt = faces.shape[0]
 		self.element_cnt = element_indices.shape[0]
@@ -78,11 +80,11 @@ class Object:
 		self.matrix_A = ti.Matrix.field(n=dim, m=dim, shape=(self.particle_cnt, self.particle_cnt), dtype=ti.f32)
 		self.vec_b = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
 		self.vec_x = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
+		self.past_vec_x = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
 
 		print('Vertex count: {}'.format(self.particle_cnt))
 		print('Mesh count: {}'.format(self.mesh_cnt))
 		print('Element count: {}'.format(self.element_cnt))
-		print('Element mass: {}'.format(mass))
 
 	def load_obj(self, config):
 		if dim == 2:
@@ -103,8 +105,8 @@ class Object:
 					faces.append([p1, p4, p3])
 			faces = np.array(faces)
 			element_indices = faces
-			A = ((side_length / subdivisions) ** 2) / 2
-			mass = self.rho * A
+			# A = ((side_length / subdivisions) ** 2) / 2
+			# mass = self.rho * A
 			num_sides = 3
 			# self.center = ti.Vector([0.72, 0.32])
 			self.center = ti.Vector(config.get('center'))
@@ -119,9 +121,6 @@ class Object:
 			obj_path = config.get('obj')
 			obj = tm.load_mesh(obj_path)
 			self.obj = obj
-
-			import pyvista as pv
-			import tetgen
 
 			obj_pv_format = pv.read(obj_path)
 			tet = tetgen.TetGen(obj_pv_format)
@@ -143,10 +142,11 @@ class Object:
 			self.remap_surface_index(self.remap_surface, self.surface_vertex)
 			mesh = tm.Trimesh(vertices=tet.grid.points[self.surface_vertex], faces=self.remap_surface)
 			self.map_index = self.link_mesh_vertex(obj, mesh)
-			mass = self.rho / tet.elem.shape[0]
+			# mass = self.rho / tet.elem.shape[0]
+			# self.mass = mass
 			num_sides = 4
 			self.center = ti.Vector(config.get('center'))
-		return vertices, faces, element_indices, mass, num_sides
+		return vertices, faces, element_indices, num_sides
 
 	@staticmethod
 	def process_obj_duplicate_point(path):
@@ -299,7 +299,7 @@ class Object:
 	def remap_surface_index(surface, vertex):
 		for index in range(len(surface)):
 			for dim in range(len(surface[index])):
-				if surface[index][dim] > len(vertex):
+				if surface[index][dim] >= len(vertex):
 					surface[index][dim] = vertex.index(surface[index][dim])
 
 	@staticmethod
@@ -328,7 +328,7 @@ class Object:
 		for i in range(self.particle_cnt):
 			self.particles[i].pos = self.ti_vertices[i] + self.center
 			self.particles[i].ref_pos = self.particles[i].pos
-			self.particles[i].mass = self.mass
+			# self.particles[i].mass = self.mass
 
 	@ti.kernel
 	def elements_init(self):
@@ -342,6 +342,11 @@ class Object:
 					p_i = self.particles[self.ti_element[i][j + 1]].pos
 					r[:, j] = p_i - p_0
 			self.elements[i].volume = self.compute_volume(r)
+
+			for j in ti.static(range(dim+1)):
+				index = self.elements[i].vertex_indices[j]
+				self.particles.mass[index] += 1.0 / (dim + 1) * self.elements[i].volume * self.rho
+
 			self.elements[i].ref = ti.math.inverse(r)
 
 	@ti.kernel
