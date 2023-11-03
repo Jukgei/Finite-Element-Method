@@ -14,6 +14,33 @@ def kronecker_product(a: ti.template(), b: ti.template()):
 
 
 @ti.func
+def check_symmetry(obj: ti.template()):
+	ret = 1
+	for i in range(obj.particle_cnt):
+		for j in range(obj.particle_cnt):
+			mat1 = obj.matrix_A[i, j]
+			mat2 = obj.matrix_A[j, i]
+			for k in ti.static(range(dim)):
+				for l in ti.static(range(dim)):
+					if ti.abs(mat1[k, l] - mat2[l, k]) > 1e-7:
+						print('Value {}'.format(ti.abs(mat1[k, l] - mat2[l, k])))
+						ret = 0
+	return ret
+
+
+@ti.kernel
+def update_debug_a(obj:ti.template()) -> ti.types.matrix(6, 6, ti.f32):
+	m = ti.types.matrix(obj.particle_cnt * dim , obj.particle_cnt * dim, ti.f32)(0)
+	for i in range(obj.particle_cnt):
+		for j in range(obj.particle_cnt):
+			mat = obj.matrix_A[i, j]
+			for k in ti.static(range(dim)):
+				for l in ti.static(range(dim)):
+					m[i*dim+k, j*dim+l] = mat[k, l]
+	# 				print(m)# = print(mat[k, l])
+	return m
+
+@ti.func
 def check_diagonally_dominant(obj: ti.template()):
 	ret = 1
 	for i in range(obj.particle_cnt):
@@ -194,6 +221,14 @@ def jacobi_iter_field(obj: ti.template()):
 	p_err = err
 	threshold = 1e-5
 	max_iter = 20000
+
+	# symmetry = check_symmetry(obj)
+	#
+	# if symmetry == 1:
+	# 	print('Fine!')
+	# else:
+	# 	print('Not a symmetry matrix')
+
 	# convergent = check_diagonally_dominant(obj)
 	# if convergent == 1:
 	# 	print('convergent!')
@@ -239,6 +274,7 @@ def compute_error(obj: ti.template()):
 
 @ti.func
 def jacobi_iter_field_once(obj: ti.template()):
+	omega = 0.75
 	for i in range(obj.particle_cnt):
 		b = obj.vec_b[i]
 		for j in range(obj.particle_cnt):
@@ -250,7 +286,7 @@ def jacobi_iter_field_once(obj: ti.template()):
 				obj.vec_x[i][k] = 0.0
 			else:
 				b[k] += a_ii * obj.vec_x[i][k]
-				obj.vec_x[i][k] = b[k] / a_ii
+				obj.vec_x[i][k] = omega * b[k] / a_ii + (1 - omega) * obj.past_vec_x[i][k]
 
 @ti.kernel
 def advect_implicit(obj: ti.template(), circle_blocks: ti.template()):
