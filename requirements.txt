@@ -1,0 +1,5 @@
+taichi==1.6.0
+numpy
+pyvista
+tetgen
+trimesh

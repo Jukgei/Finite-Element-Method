@@ -82,6 +82,12 @@ class Object:
 		self.vec_x = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
 		self.past_vec_x = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
 
+		# use in conjugate gradient
+		self.vec_d = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
+		self.matrix_ATA = ti.Matrix.field(n=dim, m=dim, shape=(self.particle_cnt, self.particle_cnt), dtype=ti.f32)
+		self.matrix_AT = ti.Matrix.field(n=dim, m=dim, shape=(self.particle_cnt, self.particle_cnt), dtype=ti.f32)
+		self.vec_ATb = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
+
 		print('Vertex count: {}'.format(self.particle_cnt))
 		print('Mesh count: {}'.format(self.mesh_cnt))
 		print('Element count: {}'.format(self.element_cnt))
@@ -111,11 +117,12 @@ class Object:
 			# self.center = ti.Vector([0.72, 0.32])
 			self.center = ti.Vector(config.get('center'))
 
-			# vertices = np.array([[0.0, 0.0],[0.0,0.2],[0.2,0.0]])
-			# faces = np.array([[0, 1, 2]])
+			# vertices = np.array([[0.0, 0.0],[0.1,0.1 * np.sqrt(3)],[0.2,0.0]])
+			# vertices = np.array([[0.0, 0.0],[0.0, 0.2],[0.2,0.0], [0.2, 0.2]])
+			# faces = np.array([[0, 1, 2], [ 1, 2, 3]])
 			# element_indices = faces
-			# A = (0.2 **2 )/ 2
-			# mass = self.rho * A
+			# A = (0.2 **2 )
+			# self.mass = self.rho * A
 
 		else:
 			obj_path = config.get('obj')

@@ -1,5 +1,5 @@
 # coding=utf-8
-
+import numpy as np
 import taichi as ti
 from constants import delta_time, dim, mat, vec, g_dir
 
@@ -201,10 +201,15 @@ def implicit_solver_neo_hookean(obj: ti.template()):
 	obj.vec_b.fill(vec(0.0))
 	obj.vec_x.fill(vec(0.0))
 
+	obj.vec_d.fill(vec(0.0))
+	obj.vec_ATb.fill(vec(0.0))
+	obj.matrix_ATA.fill(mat(0.0))
+	obj.matrix_AT.fill(mat(0.0))
+
 	compute_linear_system_matrix_a(obj)
 	compute_linear_system_vector_b(obj)
-	jacobi_iter_field(obj)
-
+	# jacobi_iter_field(obj)
+	cg(obj)
 	for i in range(obj.particle_cnt):
 		obj.particles.vel[i] = obj.vec_x[i]
 
@@ -271,6 +276,102 @@ def compute_error(obj: ti.template()):
 	err = ti.sqrt(err)
 	return err
 
+# conjugate gradient in taichi field
+@ti.func
+def cg(obj: ti.template()):
+
+	# for i in range(obj.particle_cnt):
+	# 	obj.vec_x[i] = obj.vec_b[i]
+
+	iter_cnt = 0
+	r = ti.types.vector(obj.particle_cnt * dim, ti.f32)(0.0)
+	# d = ti.types.vector(obj.particle_cnt * dim, ti.f32)(0.0)
+	q = ti.types.vector(obj.particle_cnt * dim, ti.f32)(0.0)
+
+	# Pre-conditioner
+	for i in range(obj.particle_cnt):
+		for j in range(obj.particle_cnt):
+			obj.matrix_AT[i, j] = obj.matrix_A[j, i].transpose()
+	for i in range(obj.particle_cnt):
+		for j in range(obj.particle_cnt):
+			obj.vec_ATb[i] += obj.matrix_AT[i, j] @ obj.vec_b[j]
+	for i in range(obj.particle_cnt):
+		for j in range(obj.particle_cnt):
+			for k in range(obj.particle_cnt):
+				obj.matrix_ATA[i, j] += obj.matrix_AT[i, k] @ obj.matrix_A[k, j]
+
+	# Non-pre conditioner
+	# for i in range(obj.particle_cnt):
+	# 	obj.vec_ATb[i] = obj.vec_b[i]
+	# for i in range(obj.particle_cnt):
+	# 	for j in range(obj.particle_cnt):
+	# 		obj.matrix_ATA[i, j] = obj.matrix_A[i, j]
+
+	# r = b - A@x
+	for i in range(obj.particle_cnt):
+		ax_ij = vec(0.0)
+		for j in range(obj.particle_cnt):
+			ax_ij += obj.matrix_ATA[i, j] @ obj.vec_x[j]
+		for k in range(dim):
+
+			r[i*dim+k] = obj.vec_ATb[i][k] - ax_ij[k]
+
+
+	for i in range(obj.particle_cnt):
+		for j in range(dim):
+			obj.vec_d[i][j] = r[i*dim+j]
+
+	d = r
+	delta_new = r @ r
+	delta_0 = delta_new
+	iter_max = 50000
+	epsilon = 5e-3
+	print('first error is {}'.format(delta_new))
+	# while iter_cnt < iter_max and delta_new > delta_0 * epsilon**2:
+	while iter_cnt < iter_max and delta_new > 1e-5:
+		# q = A @ d
+		for i in range(obj.particle_cnt):
+			ad_ij = vec(0.0)
+			for j in range(obj.particle_cnt):
+				ad_ij += obj.matrix_ATA[i, j] @ obj.vec_d[j]
+			for k in range(dim):
+				q[i*dim+k] = ad_ij[k]
+
+		alpha = delta_new / (d@q)
+
+		# x = x + alpha * d
+		for i in range(obj.particle_cnt):
+			for j in range(dim):
+				obj.vec_x[i][j] = obj.vec_x[i][j] + alpha * d[i*dim + j]
+
+		# if iter_cnt % 50 == 0:
+		# 	# r = b - A@x
+		# 	for i in range(obj.particle_cnt):
+		# 		ax_ij = vec(0.0)
+		# 		for j in range(obj.particle_cnt):
+		# 			ax_ij += obj.matrix_ATA[i, j] @ obj.vec_x[j]
+		# 		for k in range(dim):
+		# 			r[i * dim + k] = obj.vec_ATb[i][k] - ax_ij[k]
+		#
+		# else:
+			# r = r - alpha * q
+		r = r - alpha * q
+			# for i in range(obj.particle_cnt):
+			# 	for j in range(dim):
+			# 		r[i*dim + j] = r[i*dim + j] - alpha * q[i*dim+j]
+
+
+		delta_old = delta_new
+		delta_new = r @ r
+		beta = delta_new / delta_old
+		d = r + beta * d
+		for i in range(obj.particle_cnt):
+			for j in range(dim):
+				obj.vec_d[i][j] = d[i * dim + j]
+		iter_cnt = iter_cnt + 1
+		# if iter_cnt > 20:
+		# 	print('OK!', delta_new, iter_cnt)
+	print('OK!', ti.sqrt(delta_new), iter_cnt, compute_error(obj))
 
 @ti.func
 def jacobi_iter_field_once(obj: ti.template()):
@@ -321,3 +422,101 @@ def advect_implicit(obj: ti.template(), circle_blocks: ti.template()):
 
 		obj.particles.pos[index] += v * delta_time
 		# obj.particles.vel[index] = obj.particles[index].vel
+
+
+def gen_random_matrix(n):
+	np.random.seed(42)
+	return np.random.rand(n, n)
+
+def gen_n_dim_positive_diag_matrix(n):
+	np.random.seed(42)
+
+	m = np.zeros((n, n))
+	for i in range(n):
+		m[i, :i+1] = np.random.rand(i+1)
+
+	return m@m.transpose()
+
+def gen_n_dim_positive_matrix(n):
+	# np.random.seed(42)
+	A = np.random.rand(n, n)
+
+	n = A.shape[0]
+	leading_minors = []
+	for k in range(1, n + 1):
+		sub_matrix = A[:k, :k]
+		minor = np.linalg.det(sub_matrix)
+		leading_minors.append(minor)
+	while not all(num > 0 for num in leading_minors):
+		A = np.random.rand(n, n)
+		leading_minors = []
+		for k in range(1, n + 1):
+			sub_matrix = A[:k, :k]
+			minor = np.linalg.det(sub_matrix)
+			leading_minors.append(minor)
+	print(leading_minors)
+	return A
+
+def gen_n_dim_b(n):
+	return np.random.rand(n)# * 2 - 1
+
+def steepest_descent_np(A, b):
+	print('\n')
+	print('steepest descent ===============================')
+	i = 0
+	rows, _ = A.shape
+	x = np.zeros(rows)
+	r = b - A@x
+	delta = r@r
+	delta_0 = delta
+
+	i_max = 1000
+	epsilon = 1e-4
+	while i < i_max and delta > 1e-4:
+		q = A@r
+		alpha = delta / (r@q)
+		x = x + alpha * r
+
+		if i % 50 == 0:
+			r = b - A@x
+		else:
+			r = r - alpha*q
+
+		delta = r @ r
+		i = i+1
+	print('x is ', x)
+	print('iter count is ', i)
+	print('loss is ', np.linalg.norm(A @ x - b))
+
+
+def conjugate_gradient_np(A, b):
+	print('Input: A is ', A)
+	print('Input: b is ', b)
+
+	i = 0
+	rows, _ = A.shape
+	x = np.zeros(rows)
+	r = b - A @ x
+	d = r
+	delta_new = r.transpose() @ r
+	delta_0 = delta_new
+	i_max = 300000
+	epsilon = 1e-4
+	while i < i_max and delta_new > delta_0 * epsilon ** 2:
+		q = A @ d
+		alpha = delta_new / (d.transpose() @ q)
+		x = x + alpha * d
+		if i % 10 == 0:
+			r = b - A@x
+		else:
+			r = r - alpha * q
+		delta_old = delta_new
+		delta_new = r.transpose() @ r
+		beta = delta_new / delta_old
+		d = r + beta * d
+		i = i + 1
+		# print('loss is', delta_new)
+	print('x is ', x)
+	print('iter count is ', i)
+	print('loss is ', np.linalg.norm(A@x - b))
+	return x

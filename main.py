@@ -1,5 +1,5 @@
 # coding=utf-8
-
+import numpy as np
 import taichi as ti
 import argparse
 import utils
@@ -11,8 +11,49 @@ def fem(soft_obj):
 	else:
 		implicit_solver_neo_hookean(soft_obj)
 
+		## debug code
+		# A = soft_obj.matrix_ATA.to_numpy()
+		# from constants import dim
+		# AA = np.zeros([soft_obj.particle_cnt * dim, soft_obj.particle_cnt * dim])
+		# rows, cols, _, __ = A.shape
+		# for i in range(rows):
+		# 	for j in range(cols):
+		# 		AA[i*dim: i*dim+dim, j*dim:j*dim+dim] = A[i, j]
+		#
+		# n = AA.shape[0]
+		# leading_minors = []
+		# for k in range(1, n + 1):
+		# 	sub_matrix = AA[:k, :k]
+		# 	minor = np.linalg.det(sub_matrix)
+		# 	leading_minors.append(minor)
+		# print('\n')
+
 
 if __name__ == '__main__':
+
+
+	# from solver.implicit import gen_n_dim_positive_diag_matrix, conjugate_gradient_np, gen_n_dim_b, gen_random_matrix, steepest_descent_np
+	# from solver.implicit import gen_n_dim_positive_matrix
+	# n = 5
+	# # A = gen_n_dim_positive_diag_matrix(n)
+	# A = gen_n_dim_positive_matrix(n)
+	# # A = gen_random_matrix(n)
+	# b = gen_n_dim_b(n)
+	#
+	# print('\n')
+	# from scipy.sparse.linalg import cg, gmres
+	#
+	# # x, info = gmres(A, b)
+	# x, info = cg(A.transpose()@ A, A.transpose()@b)
+	# print(x, info)
+	# print('\n')
+	# x = conjugate_gradient_np(A.transpose()@ A, A.transpose() @b)
+	# print('real loss is ', np.linalg.norm(A@x - b))
+	# # steepest_descent_np(A, b)
+	#
+	# while True:
+	# 	pass
+
 	parser = argparse.ArgumentParser(description='FEM in Taichi')
 	parser.add_argument('--config', help="Please input a config json file.", type=str, default='default.json')
 	args = parser.parse_args()
