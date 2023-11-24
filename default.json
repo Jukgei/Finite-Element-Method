@@ -4,6 +4,8 @@
   "sim_count": 10,
   "auto_diff": false,
   "use_explicit_method": false,
+  "implicit_method": 0,
+  "preconditioned": 1,
   "g_dir": [0, -1],
   "is_output_gif": true,
   "is_output_ply": false,

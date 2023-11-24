@@ -57,9 +57,7 @@ class Object:
 		self.meshs = Mesh.field(shape=self.mesh_cnt)
 		self.elements = Element.field(shape=self.element_cnt)
 		self.tensors = ti.ndarray(dtype=mat, shape=(self.element_cnt, dim, dim))
-		# self.tensors_com = ti.ndarray(dtype=mat, shape=(self.element_cnt, dim, dim))
-		# self.tensors_type = ti.types.ndarray(dtype=ti.math.mat3, ndim=3)
-		# self.tensors_cache = ti.field(dtype=ti.f32, shape=(self.element_cnt, dim, dim, dim, dim))
+
 		self.particles = Particle.field(shape=self.particle_cnt, needs_grad=True)
 
 		self.ti_vertices = ti.Vector.field(dim, ti.f32, shape=vertices.shape[0])
@@ -117,6 +115,7 @@ class Object:
 			# self.center = ti.Vector([0.72, 0.32])
 			self.center = ti.Vector(config.get('center'))
 
+			# Debug Mesh
 			# vertices = np.array([[0.0, 0.0],[0.1,0.1 * np.sqrt(3)],[0.2,0.0]])
 			# vertices = np.array([[0.0, 0.0],[0.0, 0.2],[0.2,0.0], [0.2, 0.2]])
 			# faces = np.array([[0, 1, 2], [ 1, 2, 3]])

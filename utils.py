@@ -12,6 +12,8 @@ def sys_init(config):
 	constants.use_explicit_method = config.get('use_explicit_method')
 	constants.delta_time = config.get('delta_time')
 	constants.g_dir = config.get('g_dir')
+	constants.implicit_method = config.get('implicit_method')
+	constants.preconditioned = config.get('preconditioned')
 	# print('dim isss', dim, constants.dim)
 	dim = constants.dim
 	constants.vec = ti.types.vector(dim, ti.f32)

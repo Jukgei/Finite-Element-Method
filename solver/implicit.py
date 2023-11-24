@@ -1,6 +1,8 @@
 # coding=utf-8
 import numpy as np
 import taichi as ti
+
+import constants
 from constants import delta_time, dim, mat, vec, g_dir
 
 
@@ -201,15 +203,20 @@ def implicit_solver_neo_hookean(obj: ti.template()):
 	obj.vec_b.fill(vec(0.0))
 	obj.vec_x.fill(vec(0.0))
 
-	obj.vec_d.fill(vec(0.0))
-	obj.vec_ATb.fill(vec(0.0))
-	obj.matrix_ATA.fill(mat(0.0))
-	obj.matrix_AT.fill(mat(0.0))
+	if constants.implicit_method == constants.CONJUGATE_GRADIENT_METHOD:
+		obj.vec_d.fill(vec(0.0))
+		obj.vec_ATb.fill(vec(0.0))
+		obj.matrix_ATA.fill(mat(0.0))
+		obj.matrix_AT.fill(mat(0.0))
 
 	compute_linear_system_matrix_a(obj)
 	compute_linear_system_vector_b(obj)
-	# jacobi_iter_field(obj)
-	cg(obj)
+
+	if constants.implicit_method == constants.JACOBIN_METHOD:
+		jacobi_iter_field(obj)
+	elif constants.implicit_method == constants.CONJUGATE_GRADIENT_METHOD:
+		cg(obj)
+
 	for i in range(obj.particle_cnt):
 		obj.particles.vel[i] = obj.vec_x[i]
 
@@ -276,6 +283,27 @@ def compute_error(obj: ti.template()):
 	err = ti.sqrt(err)
 	return err
 
+@ti.func
+def preconditioned(obj: ti.template()):
+	for i in range(obj.particle_cnt):
+		for j in range(obj.particle_cnt):
+			obj.matrix_AT[i, j] = obj.matrix_A[j, i].transpose()
+	for i in range(obj.particle_cnt):
+		for j in range(obj.particle_cnt):
+			obj.vec_ATb[i] += obj.matrix_AT[i, j] @ obj.vec_b[j]
+	for i in range(obj.particle_cnt):
+		for j in range(obj.particle_cnt):
+			for k in range(obj.particle_cnt):
+				obj.matrix_ATA[i, j] += obj.matrix_AT[i, k] @ obj.matrix_A[k, j]
+
+@ti.func
+def non_preconditioned(obj: ti.template()):
+	for i in range(obj.particle_cnt):
+		obj.vec_ATb[i] = obj.vec_b[i]
+	for i in range(obj.particle_cnt):
+		for j in range(obj.particle_cnt):
+			obj.matrix_ATA[i, j] = obj.matrix_A[i, j]
+
 # conjugate gradient in taichi field
 @ti.func
 def cg(obj: ti.template()):
@@ -288,19 +316,27 @@ def cg(obj: ti.template()):
 	# d = ti.types.vector(obj.particle_cnt * dim, ti.f32)(0.0)
 	q = ti.types.vector(obj.particle_cnt * dim, ti.f32)(0.0)
 
+
+	if constants.preconditioned == 1:
+		preconditioned(obj)
+	else:
+		non_preconditioned(obj)
+
 	# Pre-conditioner
-	for i in range(obj.particle_cnt):
-		for j in range(obj.particle_cnt):
-			obj.matrix_AT[i, j] = obj.matrix_A[j, i].transpose()
-	for i in range(obj.particle_cnt):
-		for j in range(obj.particle_cnt):
-			obj.vec_ATb[i] += obj.matrix_AT[i, j] @ obj.vec_b[j]
-	for i in range(obj.particle_cnt):
-		for j in range(obj.particle_cnt):
-			for k in range(obj.particle_cnt):
-				obj.matrix_ATA[i, j] += obj.matrix_AT[i, k] @ obj.matrix_A[k, j]
+	# preconditioned(obj)
+	# for i in range(obj.particle_cnt):
+	# 	for j in range(obj.particle_cnt):
+	# 		obj.matrix_AT[i, j] = obj.matrix_A[j, i].transpose()
+	# for i in range(obj.particle_cnt):
+	# 	for j in range(obj.particle_cnt):
+	# 		obj.vec_ATb[i] += obj.matrix_AT[i, j] @ obj.vec_b[j]
+	# for i in range(obj.particle_cnt):
+	# 	for j in range(obj.particle_cnt):
+	# 		for k in range(obj.particle_cnt):
+	# 			obj.matrix_ATA[i, j] += obj.matrix_AT[i, k] @ obj.matrix_A[k, j]
 
 	# Non-pre conditioner
+	# non_preconditioned()
 	# for i in range(obj.particle_cnt):
 	# 	obj.vec_ATb[i] = obj.vec_b[i]
 	# for i in range(obj.particle_cnt):
@@ -324,9 +360,9 @@ def cg(obj: ti.template()):
 	d = r
 	delta_new = r @ r
 	delta_0 = delta_new
-	iter_max = 50000
+	iter_max = 500
 	epsilon = 5e-3
-	print('first error is {}'.format(delta_new))
+	# print('first error is {}'.format(delta_new))
 	# while iter_cnt < iter_max and delta_new > delta_0 * epsilon**2:
 	while iter_cnt < iter_max and delta_new > 1e-5:
 		# q = A @ d
@@ -369,9 +405,8 @@ def cg(obj: ti.template()):
 			for j in range(dim):
 				obj.vec_d[i][j] = d[i * dim + j]
 		iter_cnt = iter_cnt + 1
-		# if iter_cnt > 20:
-		# 	print('OK!', delta_new, iter_cnt)
-	print('OK!', ti.sqrt(delta_new), iter_cnt, compute_error(obj))
+
+	print('Error: {}, iter count {}'.format(delta_new, iter_cnt))
 
 @ti.func
 def jacobi_iter_field_once(obj: ti.template()):

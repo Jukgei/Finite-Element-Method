@@ -1,9 +1,11 @@
 {
   "dim": 3,
-  "delta_time": 5e-2,
+  "delta_time": 5e-4,
   "sim_count": 10,
   "auto_diff": false,
   "use_explicit_method": false,
+  "implicit_method": 1,
+  "preconditioned": 1,
   "g_dir": [0, -1, 0],
   "is_output_gif": false,
   "is_output_ply": false,
@@ -12,9 +14,9 @@
     {
       "id": 0,
       "rho": 1000,
-      "center": [2, 2, 2],
-      "obj": "./obj/cube.stl",
-      "E": 2e3,
+      "center": [2, 1, 2],
+      "obj": "./obj/spot100.obj",
+      "E": 1e5,
       "nu": 0.2,
       "damping": 5
     }
