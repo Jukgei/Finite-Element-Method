@@ -520,3 +520,24 @@ def conjugate_gradient_np(A, b):
 	print('iter count is ', i)
 	print('loss is ', np.linalg.norm(A@x - b))
 	return x
+
+def test():
+	n = 5
+	# A = gen_n_dim_positive_diag_matrix(n)
+	A = gen_n_dim_positive_matrix(n)
+	# A = gen_random_matrix(n)
+	b = gen_n_dim_b(n)
+
+	print('\n')
+	from scipy.sparse.linalg import cg, gmres
+
+	# x, info = gmres(A, b)
+	x, info = cg(A.transpose()@ A, A.transpose()@b)
+	print(x, info)
+	print('\n')
+	x = conjugate_gradient_np(A.transpose()@ A, A.transpose() @b)
+	print('real loss is ', np.linalg.norm(A@x - b))
+	# steepest_descent_np(A, b)
+
+	while True:
+		pass

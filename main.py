@@ -31,29 +31,6 @@ def fem(soft_obj):
 
 if __name__ == '__main__':
 
-
-	# from solver.implicit import gen_n_dim_positive_diag_matrix, conjugate_gradient_np, gen_n_dim_b, gen_random_matrix, steepest_descent_np
-	# from solver.implicit import gen_n_dim_positive_matrix
-	# n = 5
-	# # A = gen_n_dim_positive_diag_matrix(n)
-	# A = gen_n_dim_positive_matrix(n)
-	# # A = gen_random_matrix(n)
-	# b = gen_n_dim_b(n)
-	#
-	# print('\n')
-	# from scipy.sparse.linalg import cg, gmres
-	#
-	# # x, info = gmres(A, b)
-	# x, info = cg(A.transpose()@ A, A.transpose()@b)
-	# print(x, info)
-	# print('\n')
-	# x = conjugate_gradient_np(A.transpose()@ A, A.transpose() @b)
-	# print('real loss is ', np.linalg.norm(A@x - b))
-	# # steepest_descent_np(A, b)
-	#
-	# while True:
-	# 	pass
-
 	parser = argparse.ArgumentParser(description='FEM in Taichi')
 	parser.add_argument('--config', help="Please input a config json file.", type=str, default='default.json')
 	args = parser.parse_args()
