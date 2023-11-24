@@ -37,7 +37,7 @@ if __name__ == '__main__':
 	config = utils.read_config(args.config)
 	utils.sys_init(config)
 
-	ti.init(ti.gpu, debug=False, device_memory_fraction=0.65, kernel_profiler=True)
+	ti.init(ti.gpu, debug=False, device_memory_fraction=0.7, kernel_profiler=True)
 
 	import constants
 	from render.render import Render
@@ -71,6 +71,13 @@ if __name__ == '__main__':
 	dt = config.get("delta_time")
 	ply_cnt = 0
 	video_manager = ti.tools.VideoManager(output_dir="./output", framerate=output_fps, automatic_build=False)
+	if constants.use_explicit_method:
+		print('Simulation method: explicit method. Auto-diff {}'.format(bool(constants.auto_diff)))
+	else:
+		if constants.implicit_method == constants.JACOBIN_METHOD:
+			print('Simulation method: implicit method. System Solver: jacobian iteration.')
+		elif constants.implicit_method == constants.CONJUGATE_GRADIENT_METHOD:
+			print('Simulation method: implicit method. System Solver: conjugate gradient. Preconditioned: {}'.format(bool(constants.preconditioned)))
 
 	while widget.running:
 		widget.get_event()

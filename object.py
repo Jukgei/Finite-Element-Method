@@ -4,7 +4,7 @@ import time
 
 import taichi as ti
 import numpy as np
-from constants import dim, vec, mat, index
+from constants import dim, vec, mat, index, use_explicit_method
 import trimesh as tm
 import pyvista as pv
 import tetgen
@@ -48,7 +48,6 @@ class Object:
 		self.mu, self.s_lambda = E / 2 / (1 + nu), E * nu / (1 + nu) / (1 - 2 * nu)
 		self.E, self.nu = E, nu
 		self.damping = config.get('damping')
-		self.mesh4 = None
 		vertices, faces, element_indices, num_sides = self.load_obj(config)
 		# self.mass = mass
 		self.particle_cnt = vertices.shape[0]
@@ -74,6 +73,12 @@ class Object:
 		self.mesh_init()
 		self.elements_init()
 
+		print('Vertex count: {}'.format(self.particle_cnt))
+		print('Mesh count: {}'.format(self.mesh_cnt))
+		print('Element count: {}'.format(self.element_cnt))
+		if use_explicit_method:
+			return
+
 		# solve linear system
 		self.matrix_A = ti.Matrix.field(n=dim, m=dim, shape=(self.particle_cnt, self.particle_cnt), dtype=ti.f32)
 		self.vec_b = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
@@ -82,13 +87,12 @@ class Object:
 
 		# use in conjugate gradient
 		self.vec_d = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
+		self.vec_r = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
+		self.vec_q = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
 		self.matrix_ATA = ti.Matrix.field(n=dim, m=dim, shape=(self.particle_cnt, self.particle_cnt), dtype=ti.f32)
 		self.matrix_AT = ti.Matrix.field(n=dim, m=dim, shape=(self.particle_cnt, self.particle_cnt), dtype=ti.f32)
 		self.vec_ATb = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
 
-		print('Vertex count: {}'.format(self.particle_cnt))
-		print('Mesh count: {}'.format(self.mesh_cnt))
-		print('Element count: {}'.format(self.element_cnt))
 
 	def load_obj(self, config):
 		if dim == 2:

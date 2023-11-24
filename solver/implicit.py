@@ -205,6 +205,8 @@ def implicit_solver_neo_hookean(obj: ti.template()):
 
 	if constants.implicit_method == constants.CONJUGATE_GRADIENT_METHOD:
 		obj.vec_d.fill(vec(0.0))
+		obj.vec_q.fill(vec(0.0))
+		obj.vec_r.fill(vec(0.0))
 		obj.vec_ATb.fill(vec(0.0))
 		obj.matrix_ATA.fill(mat(0.0))
 		obj.matrix_AT.fill(mat(0.0))
@@ -246,7 +248,7 @@ def jacobi_iter_field(obj: ti.template()):
 	# 	print('convergent!')
 	# else:
 	# 	print('divergent!')
-	print('jacobi error first {}'.format(err))
+	# print('jacobi error first {}'.format(err))
 	while err > threshold and iter_cnt < max_iter:# and convergent == 1:
 
 		jacobi_iter_field_once(obj)
@@ -257,7 +259,7 @@ def jacobi_iter_field(obj: ti.template()):
 			break
 		p_err = err
 		cache_x(obj)
-	print('jacobi field iter cnt: {}, loss {}'.format(iter_cnt, err))
+	# print('jacobi field iter cnt: {}, loss {}'.format(iter_cnt, err))
 
 
 @ti.func
@@ -308,77 +310,52 @@ def non_preconditioned(obj: ti.template()):
 @ti.func
 def cg(obj: ti.template()):
 
-	# for i in range(obj.particle_cnt):
-	# 	obj.vec_x[i] = obj.vec_b[i]
+	for i in range(obj.particle_cnt):
+		obj.vec_x[i] = obj.vec_b[i]
 
 	iter_cnt = 0
-	r = ti.types.vector(obj.particle_cnt * dim, ti.f32)(0.0)
-	# d = ti.types.vector(obj.particle_cnt * dim, ti.f32)(0.0)
-	q = ti.types.vector(obj.particle_cnt * dim, ti.f32)(0.0)
-
 
 	if constants.preconditioned == 1:
 		preconditioned(obj)
 	else:
 		non_preconditioned(obj)
 
-	# Pre-conditioner
-	# preconditioned(obj)
-	# for i in range(obj.particle_cnt):
-	# 	for j in range(obj.particle_cnt):
-	# 		obj.matrix_AT[i, j] = obj.matrix_A[j, i].transpose()
-	# for i in range(obj.particle_cnt):
-	# 	for j in range(obj.particle_cnt):
-	# 		obj.vec_ATb[i] += obj.matrix_AT[i, j] @ obj.vec_b[j]
-	# for i in range(obj.particle_cnt):
-	# 	for j in range(obj.particle_cnt):
-	# 		for k in range(obj.particle_cnt):
-	# 			obj.matrix_ATA[i, j] += obj.matrix_AT[i, k] @ obj.matrix_A[k, j]
-
-	# Non-pre conditioner
-	# non_preconditioned()
-	# for i in range(obj.particle_cnt):
-	# 	obj.vec_ATb[i] = obj.vec_b[i]
-	# for i in range(obj.particle_cnt):
-	# 	for j in range(obj.particle_cnt):
-	# 		obj.matrix_ATA[i, j] = obj.matrix_A[i, j]
-
 	# r = b - A@x
 	for i in range(obj.particle_cnt):
-		ax_ij = vec(0.0)
+		obj.vec_r[i] = obj.vec_ATb[i]
 		for j in range(obj.particle_cnt):
-			ax_ij += obj.matrix_ATA[i, j] @ obj.vec_x[j]
-		for k in range(dim):
-
-			r[i*dim+k] = obj.vec_ATb[i][k] - ax_ij[k]
-
+			obj.vec_r[i] -= obj.matrix_ATA[i, j] @ obj.vec_x[j]
 
 	for i in range(obj.particle_cnt):
-		for j in range(dim):
-			obj.vec_d[i][j] = r[i*dim+j]
+		obj.vec_d[i] = obj.vec_r[i]
 
-	d = r
-	delta_new = r @ r
-	delta_0 = delta_new
+	delta_new = 0.0
+	for i in range(obj.particle_cnt):
+		delta_new += obj.vec_r[i]@obj.vec_r[i]
+
+	# delta_0 = delta_new
 	iter_max = 500
 	epsilon = 5e-3
-	# print('first error is {}'.format(delta_new))
+	# print('Error before iteration is {}'.format(delta_new))
 	# while iter_cnt < iter_max and delta_new > delta_0 * epsilon**2:
 	while iter_cnt < iter_max and delta_new > 1e-5:
+
 		# q = A @ d
 		for i in range(obj.particle_cnt):
-			ad_ij = vec(0.0)
-			for j in range(obj.particle_cnt):
-				ad_ij += obj.matrix_ATA[i, j] @ obj.vec_d[j]
-			for k in range(dim):
-				q[i*dim+k] = ad_ij[k]
+			obj.vec_q[i] = vec(0.0)
 
-		alpha = delta_new / (d@q)
+		for i in range(obj.particle_cnt):
+			for j in range(obj.particle_cnt):
+				obj.vec_q[i] += obj.matrix_ATA[i, j] @ obj.vec_d[j]
+
+		dTq = 0.0
+		for i in range(obj.particle_cnt):
+			dTq += obj.vec_d[i]@ obj.vec_q[i]
+		alpha = delta_new / dTq
 
 		# x = x + alpha * d
 		for i in range(obj.particle_cnt):
-			for j in range(dim):
-				obj.vec_x[i][j] = obj.vec_x[i][j] + alpha * d[i*dim + j]
+			obj.vec_x[i] = obj.vec_x[i] + alpha * obj.vec_d[i]
 
 		# if iter_cnt % 50 == 0:
 		# 	# r = b - A@x
@@ -391,22 +368,24 @@ def cg(obj: ti.template()):
 		#
 		# else:
 			# r = r - alpha * q
-		r = r - alpha * q
+		for i in range(obj.particle_cnt):
+			obj.vec_r[i] = obj.vec_r[i] - alpha * obj.vec_q[i]
 			# for i in range(obj.particle_cnt):
 			# 	for j in range(dim):
 			# 		r[i*dim + j] = r[i*dim + j] - alpha * q[i*dim+j]
 
 
 		delta_old = delta_new
-		delta_new = r @ r
-		beta = delta_new / delta_old
-		d = r + beta * d
+		delta_new = 0.0
 		for i in range(obj.particle_cnt):
-			for j in range(dim):
-				obj.vec_d[i][j] = d[i * dim + j]
+			delta_new += obj.vec_r[i] @ obj.vec_r[i]
+		beta = delta_new / delta_old
+		# d = r + beta * d
+		for i in range(obj.particle_cnt):
+			obj.vec_d[i] = obj.vec_r[i] + beta * obj.vec_d[i]
 		iter_cnt = iter_cnt + 1
 
-	print('Error: {}, iter count {}'.format(delta_new, iter_cnt))
+	# print('Error: {}, iter count {}'.format(delta_new, iter_cnt))
 
 @ti.func
 def jacobi_iter_field_once(obj: ti.template()):
