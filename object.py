@@ -55,7 +55,6 @@ class Object:
 		self.element_cnt = element_indices.shape[0]
 		self.meshs = Mesh.field(shape=self.mesh_cnt)
 		self.elements = Element.field(shape=self.element_cnt)
-		self.tensors = ti.ndarray(dtype=mat, shape=(self.element_cnt, dim, dim))
 
 		self.particles = Particle.field(shape=self.particle_cnt, needs_grad=True)
 
@@ -63,11 +62,11 @@ class Object:
 		self.ti_vertices.from_numpy(vertices)
 		self.ti_faces = ti.Vector.field(3, ti.i32, shape=faces.shape[0])
 		self.ti_faces.from_numpy(faces)
+		self.indices = ti.field(dtype=ti.i32, shape=faces.shape[0] * 3)
 		self.ti_element = ti.Vector.field(num_sides, ti.i32, shape=element_indices.shape[0])
 		self.ti_element.from_numpy(element_indices)
 		self.phi = ti.field(dtype=ti.f32, shape=faces.shape[0])
 		self.U = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
-		self.indices = ti.field(dtype=ti.i32, shape=faces.shape[0] * 3)
 
 		self.particles_init()
 		self.mesh_init()
