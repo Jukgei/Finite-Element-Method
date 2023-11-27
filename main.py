@@ -94,9 +94,9 @@ if __name__ == '__main__':
 			print('Pause.')
 			run = False
 
-		# if widget.is_pressed('q'):
-		# 	print('Quit.')
-		# 	break
+		if widget.is_pressed(ti.ui.ESCAPE):
+			print('Quit.')
+			break
 
 		if run:
 			for soft_obj in soft_objects:
@@ -115,29 +115,20 @@ if __name__ == '__main__':
 				# ti.profiler.clear_kernel_profiler_info()
 
 		if is_output_obj and (virtual_time / frame_time) > ply_cnt and constants.dim == 3:
-			# np_pos = np.reshape(ps.fluid_particles.pos.to_numpy(), (ps.particle_num, 3))
-			# writer = ti.tools.PLYWriter(num_vertices=ps.particle_num)
-			# writer.add_vertex_pos(np_pos[:, 0], np_pos[:, 1], np_pos[:, 2])
-			# writer.add_vertex_rgba(
-			# 	np_rgba[:, 0], np_rgba[:, 1], np_rgba[:, 2], np_rgba[:, 3])
-			# writer.export_frame_ascii(ply_cnt, series_prefix)
-			# if ps.exist_rigid[None] == 1:
-			# 	ps.update_mesh_vextics()
 
 			for soft_obj in soft_objects:
 				soft_obj.update_obj()
 				soft_obj.save_obj(f"output/obj_{ply_cnt:06}.obj")
-			# 	with open(f"output/obj_{ply_cnt:06}.obj", "w") as f:
-			# 		e = ps.mesh.export(file_type='obj')
-			# 		f.write(e)
 			ply_cnt += 1
 
 		msgs = []
-		msgs.append("frame_cnt: {}".format(frame_cnt))
-		msgs.append("time: {:.4f}".format(virtual_time))
+		if not render.is_output_gif:
+			msgs.append("frame_cnt: {}".format(frame_cnt))
+			msgs.append("time: {:.4f}".format(virtual_time))
 
 		render.render(soft_objects, circle_blocks, virtual_time, msgs)
 
-	# if render.is_output_gif:
-	# 	render.video_manager.make_video(gif=True, mp4=True)
+	if render.is_output_gif:
+		render.video_manager.make_video(gif=True, mp4=True)
+		print('Make video success.')
 		# ffmpeg -i %6d.png -r 60 output.mp4
