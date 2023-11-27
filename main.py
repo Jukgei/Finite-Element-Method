@@ -64,7 +64,7 @@ if __name__ == '__main__':
 	now_frame = 0
 
 	# is_output_gif = config.get('is_output_gif')
-	is_output_ply = config.get('is_output_ply')
+	is_output_obj = config.get('is_output_obj')
 	output_fps = config.get('output_fps', 60)
 	frame_time = 1.0 / output_fps
 	virtual_time = 0.0
@@ -114,7 +114,7 @@ if __name__ == '__main__':
 				# ti.profiler.print_kernel_profiler_info()
 				# ti.profiler.clear_kernel_profiler_info()
 
-		if is_output_ply and (virtual_time / frame_time) > ply_cnt and constants.dim == 3:
+		if is_output_obj and (virtual_time / frame_time) > ply_cnt and constants.dim == 3:
 			# np_pos = np.reshape(ps.fluid_particles.pos.to_numpy(), (ps.particle_num, 3))
 			# writer = ti.tools.PLYWriter(num_vertices=ps.particle_num)
 			# writer.add_vertex_pos(np_pos[:, 0], np_pos[:, 1], np_pos[:, 2])
