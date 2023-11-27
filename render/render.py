@@ -95,13 +95,9 @@ class Render:
 		scene.ambient_light((0.8, 0.8, 0.8))
 		scene.point_light(pos=(3.5, 3.5, 3.5), color=(1, 1, 1))
 		scene.lines(self.box_vert, indices=self.box_lines_indices, color=(0.99, 0.68, 0.28), width=2.0)
-		# pos_ = obj.particles.pos.to_numpy()
 
 		for obj in objects:
-			scene.particles(obj.particles.pos, color=(1.0, 0.0, 0), radius=.001, index_offset=1509, index_count=1)
-			# scene.particles(obj.particles.pos, color=(1.0, 1.0, 1), radius=.01)
 			scene.mesh(obj.particles.pos, obj.indices, show_wireframe=True)
-			# scene.mesh(np.ndarray(obj.tet.grid.points[obj.surface_vertex]), obj.indices, show_wireframe=True)
 		canvas.scene(scene)
 
 		if self.is_output_gif and (virtual_time / self.frame_time) > self.output_frame_cnt:
