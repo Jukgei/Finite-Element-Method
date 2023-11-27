@@ -3,7 +3,8 @@
 A 2D/3D Finite Element Method (FEM) implemented by [Taichi Lang](https://github.com/taichi-dev/taichi).
 
 ### Feature
- 
+
+
 - Single obj FEM simulation
 - Hyperelastic material model: Neo-Hookean solid
 - Explicit method:
@@ -15,6 +16,7 @@ A 2D/3D Finite Element Method (FEM) implemented by [Taichi Lang](https://github.
 
 ### Prerequisites
 
+
 Taichi supports multiple difference backends, such as `cuda`, `metal`. For more detail, please refer to [this](https://docs.taichi-lang.org/docs/hello_world#supported-systems-and-backends).
 The code test successfully passed on both Linux 22.04 and Windows 10, with CUDA as the backend. The necessary Python packages are listed below:
 - taichi
@@ -24,6 +26,7 @@ The code test successfully passed on both Linux 22.04 and Windows 10, with CUDA 
 - trimesh
 
 ### Usage
+
 
 #### Quickstart
 - Clone the repository
