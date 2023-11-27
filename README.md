@@ -62,10 +62,13 @@ This parameter is only valid when `"use_explicit_method": false` and `implicit_m
 - `g_dir` (list): Represents the gravity direction of the simulation. For example, `[0, -1, 0]` indicates gravity in the negative y-axis direction.
 - `is_output_gif` (boolean): Determines whether to output the simulation process as a `*.gif` format result.
 - `is_output_obj` (boolean): Determines whether to output the simulation process as a `*.obj` format result.
+This parameter is only valid in 2D simulation.
 - `output_fps` (integer): Specifies the frames per second of the output.
 - `objects` (list): Contains the simulation objects and their related parameters.
+- `blocks` (list): Contains the simulation blocks and their related parameters.
+This parameter is only valid in 2D simulation. Currently only circular obstacles are supported.
 
-Each object within the objects list contains the following parameters:
+Each object within the `objects` list contains the following parameters:
 - `id` (integer): Represents the object's ID.
 - `rho` (integer): Specifies the density of the object.
 - `center`: Represents the center of the object.
@@ -76,6 +79,10 @@ Each object within the objects list contains the following parameters:
 - `damping` (float): Specifies the simulation damping of the object.
 - `obj` (string) (3D only): Specifies the path of the simulation object. 
 
+Each block within the `blocks` list contains the following parameters:
+- `id` (integer): Represents the block's ID.
+- `block_center` (list): Specifies the center of the block.
+- `block_radius` (float): Represents the radius of the circular block.
 
   
 ## Reference
