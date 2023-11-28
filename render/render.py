@@ -74,13 +74,11 @@ class Render:
 			block = circle_blocks.blocks[index]
 			self.widget.circle(block.center, color=0x343434, radius=block.radius * self.width)
 
-		# if self.is_output_gif and (virtual_time / self.frame_time) > self.output_frame_cnt:
-			# img = ti.ui.get_image_buffer_as_numpy()
-			# self.video_manager.write_frame(img)
-			# self.output_frame_cnt += 1
 		if self.is_output_gif and (virtual_time / self.frame_time) > self.output_frame_cnt:
-
-			self.widget.show(f'./output/frames/{self.output_frame_cnt:06d}.png')
+			img = self.widget.get_image()
+			self.video_manager.write_frame(img)
+			self.widget.show()
+			# self.widget.show(f'./output/frames/{self.output_frame_cnt:06d}.png')
 			self.output_frame_cnt += 1
 		else:
 			self.widget.show()

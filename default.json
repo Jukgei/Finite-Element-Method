@@ -2,19 +2,19 @@
   "dim": 2,
   "delta_time": 5e-4,
   "sim_count": 10,
-  "auto_diff": false,
-  "use_explicit_method": false,
+  "auto_diff": true,
+  "use_explicit_method": true,
   "implicit_method": 0,
   "preconditioned": 1,
   "g_dir": [0, -1],
   "is_output_gif": true,
   "is_output_obj": false,
-  "output_fps": 60,
+  "output_fps": 24,
   "objects": [
     {
       "id": 0,
       "rho": 500,
-      "center": [0.72, 0.8],
+      "center": [0.5, 0.8],
       "side_length": 0.2,
       "subdivisions": 10,
       "E": 4e4,
@@ -25,9 +25,15 @@
   "blocks": [
     {
       "id": 0,
-      "block_center": [0.5, 0.5],
-      "block_radius": 0.33
+      "block_center": [0.8, 0.5],
+      "block_radius": 0.21
+    },
+    {
+      "id": 1,
+      "block_center": [0.2, 0.5],
+      "block_radius": 0.21
     }
+
   ]
 
 }
