@@ -1,4 +1,9 @@
 ## Finite Element Method
+<p align=center id="slideshow">
+ <img src=demo/demo1_2d.gif width="25%" height="25%"/>
+
+ <img src=demo/demo2_2d.gif width="25%" height="25%"/>
+</p>
 
 A 2D/3D Finite Element Method (FEM) implemented by [Taichi Lang](https://github.com/taichi-dev/taichi).
 
