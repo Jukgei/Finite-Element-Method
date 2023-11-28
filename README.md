@@ -1,15 +1,27 @@
 ## Finite Element Method
-<p align=center id="slideshow">
- <img src=demo/demo1_2d.gif width="25%" height="25%"/>
 
- <img src=demo/demo2_2d.gif width="25%" height="25%"/>
+<p align=center >
+  <img src=demo/demo3_3d.gif width="80%" height="100%"/>
+</p>
+<div style="text-align: center;">
+3D Demo: A simulation of an elasticity spot rendered using Houdini.
+</div>
+
+<p align=center >
+  <img src=demo/demo1_2d.gif width="35%" height="25%"/>
+  <img src=demo/demo2_2d.gif width="35%" height="25%"/> 
 </p>
 
-A 2D/3D Finite Element Method (FEM) implemented by [Taichi Lang](https://github.com/taichi-dev/taichi).
+<div style="text-align: center;">
+2D Demo: A simulation of an elasticity square mesh passing through a narrow passage.
+</div>
+
+
+A Finite Element Method (FEM) implemented in [Taichi Lang](https://github.com/taichi-dev/taichi) that supports both 2D and 3D simulations. The FEM implementation includes support for both explicit and implicit integer methods.
 
 ## Feature
 
-- Single obj FEM simulation
+- Single object FEM simulation
 - Hyperelastic material model: Neo-Hookean solid
 - Explicit method:
   - [Taichi autodiff system](https://docs.taichi-lang.org/docs/differentiable_programming#limitations-of-taichi-autodiff-system)

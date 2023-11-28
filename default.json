@@ -9,7 +9,7 @@
   "g_dir": [0, -1],
   "is_output_gif": true,
   "is_output_obj": false,
-  "output_fps": 24,
+  "output_fps": 60,
   "objects": [
     {
       "id": 0,

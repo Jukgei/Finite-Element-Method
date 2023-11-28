@@ -3,11 +3,11 @@
   "delta_time": 5e-4,
   "sim_count": 10,
   "auto_diff": false,
-  "use_explicit_method": false,
+  "use_explicit_method": true,
   "implicit_method": 1,
   "preconditioned": 1,
   "g_dir": [0, -1, 0],
-  "is_output_gif": false,
+  "is_output_gif": true,
   "is_output_obj": false,
   "output_fps": 60,
   "objects": [
@@ -15,10 +15,10 @@
       "id": 0,
       "rho": 1000,
       "center": [2, 1, 2],
-      "obj": "./obj/spot100.obj",
+      "obj": "./obj/spot.obj",
       "E": 4e4,
-      "nu": 0.2,
-      "damping": 5
+      "nu": 0.4,
+      "damping": 10
     }
   ],
   "blocks": [
