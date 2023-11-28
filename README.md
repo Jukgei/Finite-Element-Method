@@ -3,18 +3,18 @@
 <p align=center >
   <img src=demo/demo3_3d.gif width="80%" height="100%"/>
 </p>
-<div style="text-align: center;">
+<p align=center >
 3D Demo: A simulation of an elasticity spot rendered using Houdini.
-</div>
+</p>
 
 <p align=center >
   <img src=demo/demo1_2d.gif width="35%" height="25%"/>
   <img src=demo/demo2_2d.gif width="35%" height="25%"/> 
 </p>
 
-<div style="text-align: center;">
+<p align=center >
 2D Demo: A simulation of an elasticity square mesh passing through a narrow passage.
-</div>
+</p>
 
 
 A Finite Element Method (FEM) implemented in [Taichi Lang](https://github.com/taichi-dev/taichi) that supports both 2D and 3D simulations. The FEM implementation includes support for both explicit and implicit integer methods.
