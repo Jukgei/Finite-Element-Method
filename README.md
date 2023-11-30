@@ -1,7 +1,7 @@
 ## Finite Element Method
 
 <p align=center >
-  <img src=demo/demo3_3d.gif width="80%" height="100%"/>
+  <img src=demo/demo3_3d.gif width="75%" height="100%"/>
 </p>
 <p align=center >
 3D Demo: A simulation of an elasticity spot rendered using Houdini.
@@ -17,7 +17,8 @@
 </p>
 
 
-A Finite Element Method (FEM) implemented in [Taichi Lang](https://github.com/taichi-dev/taichi) that supports both 2D and 3D simulations. The FEM implementation includes support for both explicit and implicit integer methods.
+A Finite Element Method (FEM) implemented in [Taichi Lang](https://github.com/taichi-dev/taichi) that supports both 2D and 3D simulations. 
+The FEM implementation includes support for both explicit and implicit integer methods. Have fun!
 
 ## Feature
 
@@ -34,12 +35,16 @@ A Finite Element Method (FEM) implemented in [Taichi Lang](https://github.com/ta
 ## Prerequisites
 
 Taichi supports multiple difference backends, such as `cuda`, `metal`. For more detail, please refer to [this](https://docs.taichi-lang.org/docs/hello_world#supported-systems-and-backends).
+We utilize the `pyvista`, `tetgen` and `trimesh` packages to convert triangle meshes into tetrahedral meshes.
 The code test successfully passed on both Linux 22.04 and Windows 10, with CUDA as the backend. The necessary Python packages are listed below:
+
 - taichi
 - numpy
 - pyvista
 - tetgen
 - trimesh
+
+If you intend to output your simulation results in `*.gif` or `*.mp4` format, it is necessary to have `ffmpeg` installed.
 
 ## Usage
 
@@ -52,11 +57,14 @@ The code test successfully passed on both Linux 22.04 and Windows 10, with CUDA 
   ```bash
   cd Finite-Element-Method
   pip install -r requirements.txt
+  sudo apt install ffmpeg # if you intend to output your simulation results in `*.gif` of `*.mp4`
   ```
 - Run simulation
   ```bash
   python main.py  # use default config
   ```
+  If you are able to view the simulation, such as the 2D demo mentioned earlier, 
+it indicates that your environment configuration is correct.
 - Use custom config
   ```bash
   python main.py --config ./config/demo_3d.json 
