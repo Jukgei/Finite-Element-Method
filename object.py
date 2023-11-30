@@ -92,39 +92,42 @@ class Object:
 		self.matrix_AT = ti.Matrix.field(n=dim, m=dim, shape=(self.particle_cnt, self.particle_cnt), dtype=ti.f32)
 		self.vec_ATb = ti.Vector.field(n=dim, dtype=ti.f32, shape=self.particle_cnt)
 
+	def construct_2d_mesh(self, config):
+		side_length = config.get('side_length')
+		subdivisions = config.get('subdivisions')
+		x = np.linspace(0, side_length, subdivisions + 1)  #
+		y = np.linspace(0, side_length, subdivisions + 1)  #
+		vertices = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)  #
+
+		faces = []
+		for i in range(subdivisions):
+			for j in range(subdivisions):
+				p1 = i * (subdivisions + 1) + j
+				p2 = p1 + 1
+				p3 = p1 + subdivisions + 1
+				p4 = p3 + 1
+				faces.append([p1, p2, p4])
+				faces.append([p1, p4, p3])
+		faces = np.array(faces)
+		element_indices = faces
+		# A = ((side_length / subdivisions) ** 2) / 2
+		# mass = self.rho * A
+		num_sides = 3
+		# self.center = ti.Vector([0.72, 0.32])
+		self.center = ti.Vector(config.get('center'))
+
+		# Debug Mesh
+		# vertices = np.array([[0.0, 0.0],[0.1,0.1 * np.sqrt(3)],[0.2,0.0]])
+		# vertices = np.array([[0.0, 0.0],[0.0, 0.2],[0.2,0.0], [0.2, 0.2]])
+		# faces = np.array([[0, 1, 2], [ 1, 2, 3]])
+		# element_indices = faces
+		# A = (0.2 **2 )
+		# self.mass = self.rho * A
+		return vertices, faces, element_indices, num_sides
 
 	def load_obj(self, config):
 		if dim == 2:
-			side_length = config.get('side_length')
-			subdivisions = config.get('subdivisions')
-			x = np.linspace(0, side_length, subdivisions + 1)  #
-			y = np.linspace(0, side_length, subdivisions + 1)  #
-			vertices = np.array(np.meshgrid(x, y)).T.reshape(-1, 2)  #
-
-			faces = []
-			for i in range(subdivisions):
-				for j in range(subdivisions):
-					p1 = i * (subdivisions + 1) + j
-					p2 = p1 + 1
-					p3 = p1 + subdivisions + 1
-					p4 = p3 + 1
-					faces.append([p1, p2, p4])
-					faces.append([p1, p4, p3])
-			faces = np.array(faces)
-			element_indices = faces
-			# A = ((side_length / subdivisions) ** 2) / 2
-			# mass = self.rho * A
-			num_sides = 3
-			# self.center = ti.Vector([0.72, 0.32])
-			self.center = ti.Vector(config.get('center'))
-
-			# Debug Mesh
-			# vertices = np.array([[0.0, 0.0],[0.1,0.1 * np.sqrt(3)],[0.2,0.0]])
-			# vertices = np.array([[0.0, 0.0],[0.0, 0.2],[0.2,0.0], [0.2, 0.2]])
-			# faces = np.array([[0, 1, 2], [ 1, 2, 3]])
-			# element_indices = faces
-			# A = (0.2 **2 )
-			# self.mass = self.rho * A
+			vertices, faces, element_indices, num_sides = self.construct_2d_mesh(config)
 
 		else:
 			obj_path = config.get('obj')
